@@ -3046,7 +3046,7 @@ async function claimName(n) {
 function openNamer(play) {
   pendingPlay = !!play;
   $('#nameIn').value = myName || (ownerMode ? OWNER_NAME : randomName());
-  $('#nameNote').textContent = namesShared ? 'Names are shared: nobody else who plays this game can use yours.' : 'Can't reach the game server right now, so this name is only kept on this device.';
+  $('#nameNote').textContent = namesShared ? 'Names are shared: nobody else who plays this game can use yours.' : 'Can’t reach the game server right now, so this name is only kept on this device.';
   $('#menu').hidden = true; $('#namer').hidden = false;
   queueCheck(); setTimeout(() => $('#nameIn').focus(), 30);
 }
