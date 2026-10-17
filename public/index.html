@@ -359,6 +359,12 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 .scard button.on { background: var(--ink); color: var(--gold); cursor: default; }
 .scard button:disabled { background: rgba(11,22,48,.6); color: var(--muted); cursor: not-allowed; box-shadow: none; }
 .scard button:disabled .keyico { color: var(--muted); }
+.gunpv { grid-column: 1 / -1; position: relative; border: 3px solid var(--ink); border-radius: 14px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 60%, #2a4a8a 0%, #13234a 55%, #0b1630 100%); box-shadow: 0 4px 0 var(--ink); }
+#pvMount { min-height: 150px; } .pvcanvas { display: block; width: 100%; height: auto; cursor: grab; touch-action: none; } .pvcanvas:active { cursor: grabbing; }
+.pvinfo { position: absolute; left: 14px; bottom: 10px; display: grid; gap: 2px; pointer-events: none; }
+.pvinfo b { font: 20px var(--display); color: #fff; letter-spacing: .03em; text-shadow: 0 2px 0 var(--ink); }
+.pvinfo span { font: 12px system-ui, sans-serif; color: rgba(255,255,255,.75); }
 .skinpick { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; }
 .wchip { appearance: none; display: inline-flex; align-items: center; gap: 6px; border: 3px solid var(--ink); background: rgba(255,255,255,.08); color: #fff; border-radius: 10px; padding: 5px 10px; font: 14px var(--display); cursor: pointer; box-shadow: 0 3px 0 var(--ink); }
 .wchip svg { width: 34px; height: 17px; }
@@ -1920,6 +1926,8 @@ function makeBomb(r, lit) {
 
 /* ---------- Weapon skins ---------- */
 const skinTex = {}, animTex = [], animMats = [];
+// skin-changer 3D preview state (see Skin preview below)
+const pv = { renderer: null, scene: null, cam: null, holder: null, cache: new Map(), showing: '', yaw: 0.5, drag: null, building: false };
 // Animated skins: how each texture drifts (units per second) and how its glow pulses over time
 const SKIN_SCROLL = { rainbow: [0.25, 0], toxic: [0, -0.12], lava: [0.01, -0.035], galaxy: [0.02, 0.012], enargade: [0.06, 0.03], magnite: [0.05, -0.05] };
 const SKIN_GLOW = {
@@ -1988,7 +1996,7 @@ function skinMaterial(orig, sk) {
 // recolour the gun parts of a first-person model; arms, hands, lenses and glows keep their look
 function applySkin(root, key) {
   const sk = skinEquip[key];
-  if (!sk || sk === 'default' || !SKINS[sk] || !skinUnlocked(sk)) return;
+  if (!sk || sk === 'default' || !SKINS[sk] || (!skinUnlocked(sk) && !pv.building)) return;
   root.traverse(o => {
     if (!o.isMesh || o.userData.noSkin) return;
     const m = o.material;
@@ -3354,6 +3362,7 @@ function frame(now) {
     bot.walk += dt * 2; const u = bot.mesh.userData; u.armL.rotation.x = Math.sin(bot.walk) * 0.15; u.head.rotation.y = Math.sin(bot.walk * 0.4) * 0.3;
   }
   tickSkins(rdt, now);
+  tickPreview(rdt);
   updateFx(dt);
   updateCamera(dt);
   if (S.mode !== 'menu' && S.mode !== 'victory') updateHud(dt);
@@ -3460,6 +3469,60 @@ function renderLoadout() {
 }
 let shopTab = 'primary';
 let skinWeapon = 'rifle';
+/* ---------- Skin preview: a spinning 3D model of your gun in the skin changer ---------- */
+function previewModel(key, sk) {
+  const id = key + ':' + sk; if (pv.cache.has(id)) return pv.cache.get(id);
+  const prevKey = vm.key, had = key in skinEquip, prevEq = skinEquip[key];
+  skinEquip[key] = sk; pv.building = true;
+  try { buildVM(key); } finally { pv.building = false; if (had) skinEquip[key] = prevEq; else delete skinEquip[key]; }
+  const g = vm.g, flash = vm.flash; vmRoot.remove(g);
+  if (prevKey) buildVM(prevKey); else { vm.g = null; vm.key = ''; }
+  // keep just the gun: drop the arms, hands and muzzle flash
+  const drop = [];
+  g.traverse(o => { if (o.isMesh && (o === flash || o.userData.noSkin || (o.material && o.material.color && o.material.color.getHex() === 0xefe1a6))) drop.push(o); });
+  drop.forEach(o => o.parent && o.parent.remove(o));
+  g.position.set(0, 0, 0); g.rotation.set(0, 0, 0); g.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new V3()), size = box.getSize(new V3());
+  g.position.sub(c);
+  const wrapG = new THREE.Group(); wrapG.add(g); wrapG.scale.setScalar(1.7 / Math.max(size.x, size.y, size.z, 0.05));
+  pv.cache.set(id, wrapG); return wrapG;
+}
+function initPreview() {
+  if (pv.renderer) return;
+  pv.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  pv.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  pv.scene = new THREE.Scene();
+  pv.scene.add(new THREE.HemisphereLight(0xffffff, 0x4a5a80, 1.0));
+  const key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(2, 3, 2); pv.scene.add(key);
+  const rim = new THREE.DirectionalLight(0x9fd0ff, 0.5); rim.position.set(-3, 1, -2); pv.scene.add(rim);
+  pv.cam = new THREE.PerspectiveCamera(30, 2, 0.1, 50); pv.cam.position.set(0, 0.55, 3.6); pv.cam.lookAt(0, 0, 0);
+  pv.holder = new THREE.Group(); pv.scene.add(pv.holder);
+  const el = pv.renderer.domElement; el.className = 'pvcanvas'; el.setAttribute('aria-label', 'Spinning preview of your gun. Drag to turn it.'); el.setAttribute('role', 'img');
+  el.addEventListener('pointerdown', e => { pv.drag = { x: e.clientX }; try { el.setPointerCapture(e.pointerId); } catch (x) {} });
+  el.addEventListener('pointermove', e => { if (!pv.drag) return; pv.yaw += (e.clientX - pv.drag.x) * 0.012; pv.drag.x = e.clientX; });
+  const up = () => { pv.drag = null; }; el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+}
+function showPreview(key, sk) {
+  initPreview();
+  const id = key + ':' + sk;
+  if (pv.showing !== id) {
+    while (pv.holder.children.length) pv.holder.remove(pv.holder.children[0]);
+    pv.holder.add(previewModel(key, sk)); pv.showing = id;
+  }
+  const n = $('#pvName'); if (n) n.textContent = `${W[key].name} · ${SKINS[sk] ? SKINS[sk].name : 'Factory'}`;
+}
+function mountPreview() {
+  const mount = $('#pvMount'); if (!mount) return;
+  initPreview(); mount.appendChild(pv.renderer.domElement);
+  const w = Math.max(200, mount.clientWidth), h = Math.round(Math.min(220, Math.max(150, w * 0.32)));
+  pv.renderer.setSize(w, h, false); pv.cam.aspect = w / h; pv.cam.updateProjectionMatrix();
+}
+function tickPreview(dt) {
+  if (!pv.renderer || !pv.renderer.domElement.isConnected || $('#shop').hidden) return;
+  if (!pv.drag) pv.yaw += dt * 0.6;
+  pv.holder.rotation.set(0.12, pv.yaw, 0);
+  pv.renderer.render(pv.scene, pv.cam);
+}
 function renderSkins() {
   const ws = SLOTS.flatMap(sl => Object.keys(W).filter(k => W[k].slot === sl && owned.has(k) && canSkin(k)));
   if (!ws.includes(skinWeapon)) skinWeapon = ws.includes(equip.primary) ? equip.primary : ws[0];
@@ -3474,15 +3537,17 @@ function renderSkins() {
     else if (ownerMode) btn = `<button type="button" class="buy" data-act="skin-buy" data-s="${sk}">Get free</button>`;
     else if (wallet >= s.price) btn = `<button type="button" class="buy" data-act="skin-buy" data-s="${sk}">Buy ${KEY_SVG}${s.price}</button>`;
     else btn = `<button type="button" disabled>${KEY_SVG}${s.price} · need ${s.price - wallet} more</button>`;
-    return `<div class="scard ${on ? 'eq' : ''}">
+    return `<div class="scard ${on ? 'eq' : ''}" data-s="${sk}">
       <div class="swatch" style="background:${s.css}"><svg viewBox="0 0 48 24" fill="currentColor" aria-hidden="true">${ICON[skinWeapon]}</svg></div>
       ${s.owner ? '<span class="tag">OWNER</span>' : (SKIN_SCROLL[sk] || SKIN_GLOW[sk]) ? '<span class="tag anim">ANIMATED</span>' : ''}
       <span class="cn">${s.name}</span><span class="cr">${s.owner ? (ownerMode ? 'Owner exclusive · ' : s.ownerOnly ? 'Only judahpro5555 can use this · ' : enargadeEarned ? 'Earned by beating the owner · ' : 'Beat judahpro5555 in the Duel Zone · ') : ''}${W[skinWeapon].name} skin</span>
       ${btn}
     </div>`;
   }).join('');
-  $('#shopGrid').innerHTML = chips + cards;
+  const preview = `<div class="gunpv"><div id="pvMount"></div><div class="pvinfo"><b id="pvName"></b><span>Hover a skin to try it on · drag to spin</span></div></div>`;
+  $('#shopGrid').innerHTML = chips + preview + cards;
   renderWallet();
+  mountPreview(); showPreview(skinWeapon, cur);
 }
 function renderShop() {
   $('#shopTabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === shopTab));
@@ -3507,6 +3572,9 @@ function renderShop() {
 }
 function openShop(tab) { if (tab) shopTab = tab; renderShop(); $('#menu').hidden = true; $('#shop').hidden = false; }
 $('#shopTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; shopTab = b.dataset.s; renderShop(); });
+const tryOn = e => { if (shopTab !== 'skins') return; const c = e.target.closest && e.target.closest('.scard'); showPreview(skinWeapon, c ? c.dataset.s : (skinEquip[skinWeapon] || 'default')); };
+$('#shopGrid').addEventListener('mouseover', tryOn); $('#shopGrid').addEventListener('focusin', tryOn);
+$('#shopGrid').addEventListener('mouseleave', () => { if (shopTab === 'skins') showPreview(skinWeapon, skinEquip[skinWeapon] || 'default'); });
 $('#shopGrid').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
   const act = b.dataset.act;
