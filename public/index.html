@@ -192,7 +192,8 @@ body {
 @keyframes feedIn { from { transform: translateX(24px) scale(.9); opacity: 0; } }
 
 #cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
-#cross i { position: absolute; background: #fff; box-shadow: 0 0 0 1.5px var(--ink); border-radius: 1px; }
+#cross { --xc: #fff; transform-origin: 0 0; }
+#cross i { position: absolute; background: var(--xc); box-shadow: 0 0 0 1.5px var(--ink); border-radius: 1px; }
 #cross i:nth-child(1), #cross i:nth-child(2) { width: 3px; height: 9px; left: -1.5px; }
 #cross i:nth-child(3), #cross i:nth-child(4) { height: 3px; width: 9px; top: -1.5px; }
 #cross .dot { width: 4px; height: 4px; left: -2px; top: -2px; border-radius: 50%; }
@@ -386,6 +387,26 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 @keyframes vWord { 0%, 9% { transform: translateX(120%) skewX(-8deg); opacity: 0; } 17% { transform: translateX(-2%) skewX(-8deg); opacity: 1; } 21% { transform: translateX(0) skewX(-8deg); } 86% { transform: translateX(-3%) skewX(-8deg); opacity: 1; } 100% { transform: translateX(-120%) skewX(-8deg); opacity: 0; } }
 @keyframes vInfo { 0%, 20% { opacity: 0; transform: translateY(16px); } 28%, 86% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #victory.show .lb, #victory.show .vstripe, #victory.show .vword, #victory.show .vinfo { animation: none; transform: none; opacity: 1; } }
+#settings { background: rgba(11,22,48,.9); z-index: 60; }
+#settings .sheet { max-width: 640px; }
+.sgroup { display: grid; gap: 10px; padding: 14px 0; border-top: 2px solid rgba(255,255,255,.12); }
+.sgroup h2 { margin: 0; font: 15px var(--display); letter-spacing: .1em; color: var(--gold); }
+.srow { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr) 56px; gap: 12px; align-items: center; color: #fff; font: 15px/1.3 system-ui, sans-serif; }
+.srow input[type=range] { width: 100%; accent-color: var(--gold); }
+.srow b { font: 15px var(--display); text-align: right; font-variant-numeric: tabular-nums; }
+.xcs { display: flex; flex-wrap: wrap; gap: 8px; }
+.xc { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--ink); background: var(--c); cursor: pointer; }
+.xc[aria-pressed="true"] { outline: 3px solid var(--gold); outline-offset: 2px; }
+.xc:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.xprevwrap { position: relative; height: 30px; }
+#xprev { --xc: #fff; position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-origin: 0 0; }
+#xprev i { position: absolute; background: var(--xc); box-shadow: 0 0 0 1.5px var(--ink); border-radius: 1px; }
+#xprev i:nth-child(1) { width: 3px; height: 4px; left: -1.5px; top: -9px; } #xprev i:nth-child(2) { width: 3px; height: 4px; left: -1.5px; top: 5px; }
+#xprev i:nth-child(3) { height: 3px; width: 4px; top: -1.5px; left: -9px; } #xprev i:nth-child(4) { height: 3px; width: 4px; top: -1.5px; left: 5px; }
+#xprev .dot { width: 2px; height: 2px; left: -1px; top: -1px; border-radius: 50%; }
+@media (max-width: 520px) { .srow { grid-template-columns: 1fr 48px; } .srow > span:first-child { grid-column: 1 / -1; } }
+.setbtn { background: linear-gradient(180deg, #ffffff, #d7e3ff); }
+#fps { position: fixed; top: 10px; left: 12px; z-index: 35; pointer-events: none; font: 14px var(--display); color: #fff; text-shadow: 0 2px 0 var(--ink); }
 #emoteWheel { position: fixed; left: 50%; top: 50%; width: 320px; height: 320px; margin: -160px 0 0 -160px; z-index: 30; pointer-events: none; border-radius: 50%;
   background: radial-gradient(circle, transparent 0 25%, rgba(11,22,48,.62) 26% 100%); border: 3px solid var(--ink); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
 #emoteWheel .emc { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font: 20px var(--display); color: #fff; letter-spacing: .06em; text-shadow: 0 2px 0 var(--ink); }
@@ -491,7 +512,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
     <div class="group">
       <div class="lohead"><span class="glabel">LOADOUT</span><span class="wallet" id="wallet"></span></div>
       <div class="loadout" id="loadoutRow"></div>
-      <div class="admrow"><button class="shopbtn" id="shopBtn" type="button">OPEN SHOP</button><button class="shopbtn admbtn" id="adminBtn" type="button" hidden>ADMIN PANEL</button></div>
+      <div class="admrow"><button class="shopbtn" id="shopBtn" type="button">OPEN SHOP</button><button class="shopbtn setbtn" id="settingsBtn" type="button">SETTINGS</button><button class="shopbtn admbtn" id="adminBtn" type="button" hidden>ADMIN PANEL</button></div>
     </div>
     <div class="row2">
       <div class="group">
@@ -502,7 +523,6 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
           <button type="button" data-d="hard">Champion</button>
         </div>
       </div>
-      <label class="sens" for="sens"><span class="glabel">SENSITIVITY <span id="sensVal">1.0</span></span><input id="sens" type="range" min="0.3" max="2.5" step="0.1" value="1"></label>
     </div>
     <div class="group">
       <div class="glabel">BOT DUEL MAP</div>
@@ -570,6 +590,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
   <div class="vinfo"><span class="vname" id="vicName">YOU</span><span class="vscore" id="vicScore">5 – 0</span></div>
 </div>
 
+<div id="fps" hidden></div>
 <div id="emoteWheel" hidden aria-label="Emote wheel"></div>
 <div id="announce" role="status" aria-live="assertive" hidden><div class="al">ANNOUNCEMENT</div><div class="at"></div></div>
 
@@ -587,9 +608,44 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
     <p class="lede">The bot is frozen too. Hit resume to grab the mouse again.</p>
     <div class="row2">
       <button class="play" id="resumeBtn" type="button">RESUME</button>
+      <button class="ghostbtn" type="button" id="pauseSettings">Settings</button>
       <button class="ghostbtn" type="button" id="quitBtn">Quit to menu</button>
       <button class="ghostbtn" type="button" id="pauseAdmin" hidden>Admin panel</button>
     </div>
+  </div>
+</div>
+
+<div id="settings" class="overlay" hidden>
+  <div class="sheet">
+    <div><div class="eyebrow">OPTIONS</div><h1>SETTINGS</h1></div>
+    <section class="sgroup" aria-labelledby="sgMouse">
+      <h2 id="sgMouse">MOUSE</h2>
+      <label class="srow" for="sens"><span>Sensitivity</span><input id="sens" type="range" min="0.3" max="2.5" step="0.1" value="1"><b id="sensVal">1.0</b></label>
+      <label class="srow" for="setAds"><span>Aim sensitivity</span><input id="setAds" type="range" min="0.3" max="2" step="0.05" value="1"><b id="adsVal">1.00×</b></label>
+      <div class="srow"><span>Invert look</span><div class="seg"><button type="button" data-tog="invert">Inverted</button></div><b></b></div>
+    </section>
+    <section class="sgroup" aria-labelledby="sgView">
+      <h2 id="sgView">VIEW</h2>
+      <label class="srow" for="setFov"><span>Field of view</span><input id="setFov" type="range" min="65" max="105" step="1" value="78"><b id="fovVal">78</b></label>
+      <div class="srow"><span>Crosshair colour</span><div class="xcs">
+        <button type="button" class="xc" data-c="#ffffff" style="--c:#ffffff" aria-label="White"></button><button type="button" class="xc" data-c="#4be37a" style="--c:#4be37a" aria-label="Green"></button>
+        <button type="button" class="xc" data-c="#2ff3ff" style="--c:#2ff3ff" aria-label="Cyan"></button><button type="button" class="xc" data-c="#ffd23f" style="--c:#ffd23f" aria-label="Yellow"></button>
+        <button type="button" class="xc" data-c="#ff3fd2" style="--c:#ff3fd2" aria-label="Pink"></button><button type="button" class="xc" data-c="#ff3b4e" style="--c:#ff3b4e" aria-label="Red"></button>
+      </div><span class="xprevwrap"><span id="xprev"><i></i><i></i><i></i><i></i><i class="dot"></i></span></span></div>
+      <label class="srow" for="setXs"><span>Crosshair size</span><input id="setXs" type="range" min="0.6" max="2" step="0.1" value="1"><b id="xsVal">1.0×</b></label>
+      <div class="srow"><span>Damage numbers</span><div class="seg"><button type="button" data-tog="dmg">Show</button></div><b></b></div>
+      <div class="srow"><span>FPS counter</span><div class="seg"><button type="button" data-tog="fps">Show</button></div><b></b></div>
+    </section>
+    <section class="sgroup" aria-labelledby="sgSound">
+      <h2 id="sgSound">SOUND</h2>
+      <label class="srow" for="setVol"><span>Volume</span><input id="setVol" type="range" min="0" max="100" step="5" value="80"><b id="volVal">80%</b></label>
+    </section>
+    <section class="sgroup" aria-labelledby="sgGfx">
+      <h2 id="sgGfx">GRAPHICS</h2>
+      <div class="srow"><span>Quality</span><div class="seg"><button type="button" data-tog="quality" data-v="low">Low</button><button type="button" data-tog="quality" data-v="medium">Medium</button><button type="button" data-tog="quality" data-v="high">High</button></div><b></b></div>
+      <div class="srow"><span>Shadows</span><div class="seg"><button type="button" data-tog="shadows">On</button></div><b></b></div>
+    </section>
+    <div class="row2"><button class="play" id="setClose" type="button">DONE</button><button class="ghostbtn" id="setReset" type="button">Reset to default</button></div>
   </div>
 </div>
 
@@ -674,6 +730,8 @@ const GRAV = 22, JUMP = 7.4, R = 0.36, H = 1.85, EYE = 1.62, WIN = 5;
 
 /* ---------- Settings ---------- */
 let diff = 'normal', sens = 1, wallet = 500;
+// player settings (Settings menu); saved with the rest of the profile in this browser
+const cfg = { ads: 1, invert: false, fov: 78, vol: 0.8, xc: '#ffffff', xs: 1, dmg: true, fps: false, shadows: true, quality: 'high' };
 // the artifact's owner gets unlimited keys (checked once the viewer answers)
 let ownerMode = false;
 let mapPick = 'arena'; // bot duel map (or 'random')
@@ -707,6 +765,9 @@ const owned = new Set(Object.keys(W).filter(k => W[k].price === 0));
 try {
   const s = JSON.parse(localStorage.getItem('duelground') || '{}');
   if (DIFF[s.diff]) diff = s.diff; if (s.sens) sens = +s.sens;
+  if (s.cfg && typeof s.cfg === 'object') for (const k in cfg) if (typeof s.cfg[k] === typeof cfg[k]) cfg[k] = s.cfg[k];
+  cfg.fov = clamp(cfg.fov, 65, 105); cfg.vol = clamp(cfg.vol, 0, 1); cfg.ads = clamp(cfg.ads, 0.3, 2); cfg.xs = clamp(cfg.xs, 0.6, 2);
+  if (!/^#[0-9a-f]{6}$/i.test(cfg.xc)) cfg.xc = '#ffffff'; if (!['high', 'medium', 'low'].includes(cfg.quality)) cfg.quality = 'high';
   if (Number.isFinite(s.keys)) wallet = Math.max(0, Math.floor(s.keys));
   if (Array.isArray(s.owned)) s.owned.forEach(k => { if (W[k]) owned.add(k); });
   if (PRIMARIES.includes(s.pick)) equip.primary = s.pick;
@@ -716,11 +777,11 @@ try {
   if (Array.isArray(s.skins)) s.skins.forEach(id => { const [k, sk] = String(id).split(':'); if (canSkin(k) && SKINS[sk]) skinsOwned.add(k + ':' + sk); });
   if (s.skinEquip && typeof s.skinEquip === 'object') for (const k in s.skinEquip) { const sk = s.skinEquip[k]; if (canSkin(k) && SKINS[sk] && (sk === 'default' || skinsOwned.has(k + ':' + sk) || SKINS[sk].owner)) skinEquip[k] = sk; }
 } catch (e) {}
-const save = () => { try { localStorage.setItem('duelground', JSON.stringify({ diff, sens, keys: wallet, owned: [...owned], equip, skins: [...skinsOwned], skinEquip, eg: enargadeEarned ? 1 : 0, map: mapPick })); } catch (e) {} };
+const save = () => { try { localStorage.setItem('duelground', JSON.stringify({ diff, sens, keys: wallet, owned: [...owned], equip, skins: [...skinsOwned], skinEquip, eg: enargadeEarned ? 1 : 0, map: mapPick, cfg })); } catch (e) {} };
 
 /* ---------- Renderer & scene ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2) * ({ high: 1, medium: 0.75, low: 0.55 }[cfg.quality] || 1));
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.autoClear = false;
 $('#stage').appendChild(renderer.domElement);
@@ -741,7 +802,7 @@ scene.add(camera);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8899bb, 0.75));
 const sun = new THREE.DirectionalLight(0xffffff, 0.7);
-sun.position.set(18, 36, 10); sun.castShadow = true;
+sun.position.set(18, 36, 10); sun.castShadow = cfg.shadows;
 sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, { left: -32, right: 32, top: 32, bottom: -32, near: 1, far: 90 });
 scene.add(sun); scene.add(sun.target);
@@ -1639,10 +1700,10 @@ function hitTest(target, o, d) {
 }
 
 /* ---------- Audio ---------- */
-let ac = null, noise = null;
+let ac = null, noise = null, master = null;
 function initAudio() {
   try {
-    if (!ac) { ac = new (window.AudioContext || window.webkitAudioContext)();
+    if (!ac) { ac = new (window.AudioContext || window.webkitAudioContext)(); master = ac.createGain(); master.gain.value = cfg.vol; master.connect(ac.destination);
       noise = ac.createBuffer(1, ac.sampleRate, ac.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
     ac.resume();
   } catch (e) { ac = null; }
@@ -1651,13 +1712,13 @@ function nz(dur, type, freq, vol, t0 = 0) {
   const t = ac.currentTime + t0, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
   s.buffer = noise; f.type = type; f.frequency.value = freq;
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f); f.connect(g); g.connect(ac.destination); s.start(t); s.stop(t + dur + 0.02);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
 }
 function tone(f0, f1, dur, type, vol, t0 = 0) {
   const t = ac.currentTime + t0, o = ac.createOscillator(), g = ac.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g); g.connect(ac.destination); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
 }
 function sfx(k, v = 1) {
   if (!ac || v < 0.02) return;
@@ -3015,6 +3076,7 @@ let hitT = 0;
 function showHit(head, kill) { const h = $('#hitmark'); h.style.color = kill ? '#ff3b4e' : head ? '#ffd23f' : '#fff'; hitT = kill ? 0.45 : 0.22; }
 const nums = [];
 function floatNum(pos, v, head, color) {
+  if (!cfg.dmg) return;
   const el = document.createElement('span'); el.textContent = Math.round(v); el.style.color = color || (head ? '#ffd23f' : '#fff'); if (head) el.className = 'hs';
   $('#nums').appendChild(el); nums.push({ el, pos: pos.clone().add(new V3(rand(-0.3, 0.3), 0.25, rand(-0.3, 0.3))), t: 1 });
 }
@@ -3114,7 +3176,7 @@ function updateCamera(dt) {
   S.tilt = (S.tilt || 0) + ((p.slideT > 0 ? 0.06 : 0) - (S.tilt || 0)) * Math.min(1, dt * 10);
   camera.rotation.set(p.pitch, p.yaw, roll + S.tilt);
   const ads = aiming && w.ads && p.alive && p.reloadT <= 0;
-  const targetFov = ads ? (w.scope ? 20 : 58) : 78 + S.fovKick * 9 + (p.slideT > 0 ? 6 : 0) + (p.sprinting && Math.hypot(p.vel.x, p.vel.z) > 7 ? 5 : 0);
+  const targetFov = ads ? (w.scope ? 20 : 58) : cfg.fov + S.fovKick * 9 + (p.slideT > 0 ? 6 : 0) + (p.sprinting && Math.hypot(p.vel.x, p.vel.z) > 7 ? 5 : 0);
   camera.fov += (targetFov - camera.fov) * Math.min(1, dt * 16); camera.updateProjectionMatrix();
   vmRoot.visible = p.alive && !(ads && w.scope);
   if (!vm.g) return;
@@ -3151,8 +3213,10 @@ function updateCamera(dt) {
 
 /* ---------- Loop ---------- */
 let last = performance.now();
+let fpsN = 0, fpsT = 0;
 function frame(now) {
   requestAnimationFrame(frame);
+  if (cfg.fps) { fpsN++; if (now - fpsT > 500) { $('#fps').textContent = Math.round(fpsN * 1000 / (now - fpsT)) + ' FPS'; fpsN = 0; fpsT = now; } }
   const rdt = Math.min(0.05, (now - last) / 1000); last = now;
   S.slow = Math.max(0, (S.slow || 0) - rdt);
   const dt = S.slow > 0 ? rdt * 0.3 : rdt;
@@ -3211,9 +3275,9 @@ document.addEventListener('mousemove', e => {
   if (!locked() && !noLock) return;
   if (emo.open) { wheelAim(e.movementX, e.movementY); return; }
   const w = W[player.loadout[player.slot]];
-  const k = 0.0022 * sens * (aiming && w.ads ? (w.scope ? 0.3 : 0.75) : 1);
+  const k = 0.0022 * sens * (aiming && w.ads ? (w.scope ? 0.3 : 0.75) * cfg.ads : 1);
   player.yaw = wrap(player.yaw - e.movementX * k);
-  player.pitch = clamp(player.pitch - e.movementY * k, -1.5, 1.5);
+  player.pitch = clamp(player.pitch - e.movementY * k * (cfg.invert ? -1 : 1), -1.5, 1.5);
 });
 canvas.addEventListener('mousedown', e => {
   if (S.paused || S.mode === 'menu') return;
@@ -3356,6 +3420,55 @@ $('#shopBtn').addEventListener('click', () => openShop());
 $('#loadoutRow').addEventListener('click', e => { const b = e.target.closest('.lslot'); if (b) openShop(b.dataset.s); });
 $('#shopDone').addEventListener('click', () => { renderLoadout(); if (S.inShop) { closeLobbyShop(); return; } $('#shop').hidden = true; $('#menu').hidden = false; });
 renderLoadout();
+
+/* ---------- Settings menu ---------- */
+let settingsFrom = null;
+function applyCfg() {
+  const c = $('#cross'); c.style.setProperty('--xc', cfg.xc); c.style.transform = `scale(${cfg.xs})`;
+  $('#fps').hidden = !cfg.fps;
+  if (master) master.gain.value = cfg.vol;
+  sun.castShadow = cfg.shadows;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2) * ({ high: 1, medium: 0.75, low: 0.55 }[cfg.quality] || 1)); resize();
+}
+function renderSettings() {
+  const v = (id, val) => { const el = $('#' + id); if (el) el.textContent = val; };
+  $('#sens').value = sens; v('sensVal', sens.toFixed(1));
+  $('#setAds').value = cfg.ads; v('adsVal', cfg.ads.toFixed(2) + '×');
+  $('#setFov').value = cfg.fov; v('fovVal', String(cfg.fov));
+  $('#setVol').value = Math.round(cfg.vol * 100); v('volVal', Math.round(cfg.vol * 100) + '%');
+  $('#setXs').value = cfg.xs; v('xsVal', cfg.xs.toFixed(1) + '×');
+  document.querySelectorAll('#settings [data-tog]').forEach(b => { const k = b.dataset.tog, on = b.dataset.v === undefined ? !!cfg[k] : cfg[k] === b.dataset.v; b.setAttribute('aria-pressed', on); if (b.dataset.v === undefined) b.textContent = on ? 'On' : 'Off'; });
+  document.querySelectorAll('#settings .xc').forEach(b => b.setAttribute('aria-pressed', b.dataset.c === cfg.xc));
+  $('#xprev').style.setProperty('--xc', cfg.xc); $('#xprev').style.transform = `scale(${cfg.xs * 2})`;
+}
+function openSettings(from) {
+  settingsFrom = from; renderSettings();
+  $('#' + from).hidden = true; $('#settings').hidden = false; $('#setClose').focus();
+}
+function closeSettings() {
+  $('#settings').hidden = true;
+  if (settingsFrom) $('#' + settingsFrom).hidden = false;
+  settingsFrom = null;
+}
+(function wireSettings() {
+  const slider = (id, fn) => $('#' + id).addEventListener('input', e => { fn(+e.target.value); applyCfg(); renderSettings(); save(); });
+  slider('setAds', x => cfg.ads = x); slider('setFov', x => cfg.fov = x); slider('setVol', x => { cfg.vol = x / 100; initAudio(); });
+  slider('setXs', x => cfg.xs = x);
+  $('#setVol').addEventListener('change', () => sfx('tick'));
+  document.querySelectorAll('#settings [data-tog]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.tog; cfg[k] = b.dataset.v === undefined ? !cfg[k] : b.dataset.v; applyCfg(); renderSettings(); save();
+  }));
+  document.querySelectorAll('#settings .xc').forEach(b => b.addEventListener('click', () => { cfg.xc = b.dataset.c; applyCfg(); renderSettings(); save(); }));
+  $('#setClose').addEventListener('click', closeSettings);
+  $('#setReset').addEventListener('click', () => {
+    Object.assign(cfg, { ads: 1, invert: false, fov: 78, vol: 0.8, xc: '#ffffff', xs: 1, dmg: true, fps: false, shadows: true, quality: 'high' }); sens = 1;
+    applyCfg(); renderSettings(); save();
+  });
+  $('#settingsBtn').addEventListener('click', () => openSettings('menu'));
+  $('#pauseSettings').addEventListener('click', () => openSettings('pause'));
+  addEventListener('keydown', e => { if (e.code === 'Escape' && !$('#settings').hidden) { e.preventDefault(); closeSettings(); } });
+  applyCfg();
+})();
 
 /* ---------- Name maker ---------- */
 // names are claimed in the shared store at names/<lowercase name> so nobody can reuse one;
