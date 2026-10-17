@@ -2222,6 +2222,8 @@ function startMatch() {
   startRound();
 }
 function clearProjectiles() {
+  // leaving a match mid-celebration (pause → lobby/quit) must not leave the dancing winner behind
+  if (winner) winner.visible = false; $('#victory').hidden = true;
   grenades.forEach(g => scene.remove(g.mesh)); grenades.length = 0;
   projs.forEach(p => scene.remove(p.mesh)); projs.length = 0;
   satchels.forEach(s => scene.remove(s.mesh)); satchels.length = 0;
