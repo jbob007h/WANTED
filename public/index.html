@@ -350,6 +350,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 .scard .cn { font: 22px var(--display); text-shadow: var(--ol-s); }
 .scard .cr { font-size: 13px; color: #dbe6ff; font-weight: 500; }
 .scard .spec { font-size: 12px; color: #dbe6ff; font-variant-numeric: tabular-nums; }
+.scard .tag.anim { background: linear-gradient(90deg, #ff4f8b, #ffd23f, #4be37a, #2f9bff); }
 .scard .tag { position: absolute; top: 10px; right: 10px; font: 12px var(--display); letter-spacing: .06em; background: var(--gold); color: var(--ink); padding: 2px 8px; border-radius: 6px; }
 .scard button { appearance: none; margin-top: 4px; border: 3px solid var(--ink); border-radius: 10px; padding: 7px 10px; font: 16px var(--display); letter-spacing: .04em; cursor: pointer; box-shadow: 0 3px 0 var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .scard button.buy { background: linear-gradient(180deg, #8cff7a, #3fd14f); color: var(--ink); }
@@ -1918,11 +1919,26 @@ function makeBomb(r, lit) {
 }
 
 /* ---------- Weapon skins ---------- */
-const skinTex = {}, animTex = []; // animTex: textures that scroll every frame (Rainbow Flow)
+const skinTex = {}, animTex = [], animMats = [];
+// Animated skins: how each texture drifts (units per second) and how its glow pulses over time
+const SKIN_SCROLL = { rainbow: [0.25, 0], toxic: [0, -0.12], lava: [0.01, -0.035], galaxy: [0.02, 0.012] };
+const SKIN_GLOW = {
+  toxic: t => 0.6 + 0.55 * Math.pow(Math.sin(t * 3), 2),                   // bubbling
+  circuit: t => 0.35 + 1.1 * Math.pow(Math.max(0, Math.sin(t * 5)), 6),     // data pulse
+  lava: t => 0.75 + 0.35 * Math.sin(t * 2) + 0.1 * Math.sin(t * 7.3),        // molten flicker
+  neon: t => 0.6 + 0.6 * Math.pow(Math.sin(t * 4), 2),                       // neon throb
+  magnite: t => 0.6 + 0.7 * Math.pow(Math.sin(t * 2.2), 4),                  // heartbeat
+  diamond: t => 0.7 + 0.6 * Math.pow(Math.max(0, Math.sin(t * 6) * Math.sin(t * 2.3)), 3) // sparkle
+};
+function tickSkins(dt, now) {
+  for (const a of animTex) { a.t.offset.x = (a.t.offset.x + a.dx * dt + 1) % 1; a.t.offset.y = (a.t.offset.y + a.dy * dt + 1) % 1; }
+  const t = now / 1000;
+  for (const a of animMats) { const k = SKIN_GLOW[a.sk](t); a.m.emissive.copy(a.base).multiplyScalar(k); if (a.sk === 'diamond') a.m.emissive.offsetHSL(Math.sin(t * 1.3) * 0.06, 0, 0); }
+}
 function skinTexture(sk) {
   if (skinTex[sk]) return skinTex[sk];
-  if (sk === 'lava' || sk === 'neon' || sk === 'enargade' || sk === 'magnite') { const t = new THREE.TextureLoader().load(sk === 'lava' ? MAGMA_URI : sk === 'neon' ? NEON_URI : sk === 'magnite' ? MAGNITE_URI : ENARGADE_URI); t.wrapS = t.wrapT = THREE.RepeatWrapping; return (skinTex[sk] = t); }
-  if (SKIN_DRAW[sk]) { const t = new THREE.CanvasTexture(skinCanvas(sk)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; if (SKINS[sk].anim) animTex.push(t); return (skinTex[sk] = t); }
+  if (sk === 'lava' || sk === 'neon' || sk === 'enargade' || sk === 'magnite') { const t = new THREE.TextureLoader().load(sk === 'lava' ? MAGMA_URI : sk === 'neon' ? NEON_URI : sk === 'magnite' ? MAGNITE_URI : ENARGADE_URI); t.wrapS = t.wrapT = THREE.RepeatWrapping; return (skinTex[sk] = scrollable(sk, t)); }
+  if (SKIN_DRAW[sk]) { const t = new THREE.CanvasTexture(skinCanvas(sk)); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return (skinTex[sk] = scrollable(sk, t)); }
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
   const R = (a, b) => a + Math.random() * (b - a);
   if (sk === 'camo') {
@@ -1945,8 +1961,9 @@ function skinTexture(sk) {
     for (let i = 0; i <= 128; i += 16) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 128); x.moveTo(0, i); x.lineTo(128, i); x.stroke(); }
   }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return (skinTex[sk] = t);
+  return (skinTex[sk] = scrollable(sk, t));
 }
+function scrollable(sk, t) { if (SKIN_SCROLL[sk]) animTex.push({ t, dx: SKIN_SCROLL[sk][0], dy: SKIN_SCROLL[sk][1] }); return t; }
 const skinMatCache = new Map();
 function skinMaterial(orig, sk) {
   const key = orig.uuid + ':' + sk; if (skinMatCache.has(key)) return skinMatCache.get(key);
@@ -1964,6 +1981,7 @@ function skinMaterial(orig, sk) {
   else if (sk === 'magnite') m = new THREE.MeshPhongMaterial({ ...base, map: skinTexture(sk), emissiveMap: skinTexture(sk), emissive: 0x7a0a12, color: new THREE.Color(shade, shade * 0.9, shade * 0.9), shininess: 150, specular: 0xff8a8a });
   else if (sk === 'neon') m = new THREE.MeshPhongMaterial({ ...base, map: skinTexture(sk), emissiveMap: skinTexture(sk), emissive: 0x8a8aa8, color: new THREE.Color(shade, shade, shade), shininess: 90 });
   else m = new THREE.MeshPhongMaterial({ ...base, map: skinTexture(sk), color: new THREE.Color(shade, shade, shade) });
+  if (SKIN_GLOW[sk] && m.emissive) animMats.push({ m, sk, base: m.emissive.clone() });
   skinMatCache.set(key, m); return m;
 }
 // recolour the gun parts of a first-person model; arms, hands, lenses and glows keep their look
@@ -3334,7 +3352,7 @@ function frame(now) {
   } else if (S.mode === 'menu') {
     bot.walk += dt * 2; const u = bot.mesh.userData; u.armL.rotation.x = Math.sin(bot.walk) * 0.15; u.head.rotation.y = Math.sin(bot.walk * 0.4) * 0.3;
   }
-  for (const t of animTex) t.offset.x = (t.offset.x + rdt * 0.25) % 1;
+  tickSkins(rdt, now);
   updateFx(dt);
   updateCamera(dt);
   if (S.mode !== 'menu' && S.mode !== 'victory') updateHud(dt);
@@ -3457,7 +3475,7 @@ function renderSkins() {
     else btn = `<button type="button" disabled>${KEY_SVG}${s.price} · need ${s.price - wallet} more</button>`;
     return `<div class="scard ${on ? 'eq' : ''}">
       <div class="swatch" style="background:${s.css}"><svg viewBox="0 0 48 24" fill="currentColor" aria-hidden="true">${ICON[skinWeapon]}</svg></div>
-      ${s.owner ? '<span class="tag">OWNER</span>' : ''}
+      ${s.owner ? '<span class="tag">OWNER</span>' : (SKIN_SCROLL[sk] || SKIN_GLOW[sk]) ? '<span class="tag anim">ANIMATED</span>' : ''}
       <span class="cn">${s.name}</span><span class="cr">${s.owner ? (ownerMode ? 'Owner exclusive · ' : s.ownerOnly ? 'Only judahpro5555 can use this · ' : enargadeEarned ? 'Earned by beating the owner · ' : 'Beat judahpro5555 in the Duel Zone · ') : ''}${W[skinWeapon].name} skin</span>
       ${btn}
     </div>`;
