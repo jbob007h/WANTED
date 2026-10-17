@@ -1921,13 +1921,14 @@ function makeBomb(r, lit) {
 /* ---------- Weapon skins ---------- */
 const skinTex = {}, animTex = [], animMats = [];
 // Animated skins: how each texture drifts (units per second) and how its glow pulses over time
-const SKIN_SCROLL = { rainbow: [0.25, 0], toxic: [0, -0.12], lava: [0.01, -0.035], galaxy: [0.02, 0.012] };
+const SKIN_SCROLL = { rainbow: [0.25, 0], toxic: [0, -0.12], lava: [0.01, -0.035], galaxy: [0.02, 0.012], enargade: [0.06, 0.03], magnite: [0.05, -0.05] };
 const SKIN_GLOW = {
   toxic: t => 0.6 + 0.55 * Math.pow(Math.sin(t * 3), 2),                   // bubbling
   circuit: t => 0.35 + 1.1 * Math.pow(Math.max(0, Math.sin(t * 5)), 6),     // data pulse
   lava: t => 0.75 + 0.35 * Math.sin(t * 2) + 0.1 * Math.sin(t * 7.3),        // molten flicker
   neon: t => 0.6 + 0.6 * Math.pow(Math.sin(t * 4), 2),                       // neon throb
   magnite: t => 0.6 + 0.7 * Math.pow(Math.sin(t * 2.2), 4),                  // heartbeat
+  enargade: t => 0.55 + 0.35 * Math.sin(t * 3) + (Math.sin(t * 23) * Math.sin(t * 17.3) > 0.55 ? 0.7 : 0), // crackling electricity
   diamond: t => 0.7 + 0.6 * Math.pow(Math.max(0, Math.sin(t * 6) * Math.sin(t * 2.3)), 3) // sparkle
 };
 function tickSkins(dt, now) {
