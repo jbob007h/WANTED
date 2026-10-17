@@ -386,6 +386,15 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 @keyframes vWord { 0%, 9% { transform: translateX(120%) skewX(-8deg); opacity: 0; } 17% { transform: translateX(-2%) skewX(-8deg); opacity: 1; } 21% { transform: translateX(0) skewX(-8deg); } 86% { transform: translateX(-3%) skewX(-8deg); opacity: 1; } 100% { transform: translateX(-120%) skewX(-8deg); opacity: 0; } }
 @keyframes vInfo { 0%, 20% { opacity: 0; transform: translateY(16px); } 28%, 86% { opacity: 1; transform: none; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { #victory.show .lb, #victory.show .vstripe, #victory.show .vword, #victory.show .vinfo { animation: none; transform: none; opacity: 1; } }
+#emoteWheel { position: fixed; left: 50%; top: 50%; width: 320px; height: 320px; margin: -160px 0 0 -160px; z-index: 30; pointer-events: none; border-radius: 50%;
+  background: radial-gradient(circle, transparent 0 25%, rgba(11,22,48,.62) 26% 100%); border: 3px solid var(--ink); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
+#emoteWheel .emc { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); text-align: center; font: 20px var(--display); color: #fff; letter-spacing: .06em; text-shadow: 0 2px 0 var(--ink); }
+#emoteWheel .emc small { display: block; font: 11px/1.4 system-ui, sans-serif; letter-spacing: 0; opacity: .75; text-shadow: none; }
+#emoteWheel .em { position: absolute; left: 50%; top: 50%; display: grid; justify-items: center; gap: 2px; min-width: 76px; padding: 8px 10px; border-radius: 12px;
+  background: rgba(255,255,255,.1); border: 3px solid var(--ink); color: #fff; font: 17px var(--display); letter-spacing: .03em; transition: background .08s, color .08s; }
+#emoteWheel .em kbd { font: 11px system-ui, sans-serif; opacity: .8; }
+#emoteWheel .em.on { background: var(--gold); color: var(--ink); }
+@media (max-width: 400px) { #emoteWheel { transform: scale(.85); } }
 #announce { position: fixed; left: 0; right: 0; top: 18%; z-index: 50; pointer-events: none; display: grid; justify-items: center; gap: 8px; padding-block: 18px 22px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   background: linear-gradient(180deg, rgba(255,210,63,0), rgba(255,210,63,.92) 18%, rgba(255,184,0,.92) 82%, rgba(255,210,63,0)); text-align: center; }
@@ -509,7 +518,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
     <button class="play" id="playBtn" type="button">PLAY</button>
     <div class="keys">
       <span><kbd>WASD</kbd> move</span><span><kbd>Space</kbd> jump</span><span><kbd>Shift</kbd> sprint</span><span><kbd>Ctrl</kbd> dash</span><span><kbd>C</kbd> crouch · slide while running</span><span>Bomb jump: look at your feet, <kbd>G</kbd>, then <kbd>Space</kbd></span><span><kbd>Click</kbd> fire</span><span><kbd>Right click</kbd> aim</span>
-      <span><kbd>R</kbd> reload</span><span><kbd>1</kbd>–<kbd>4</kbd> swap</span><span><kbd>G</kbd> quick-use utility</span><span><kbd>Esc</kbd> pause</span><span>Weapons only work inside the Duel Zone</span>
+      <span><kbd>R</kbd> reload</span><span><kbd>1</kbd>–<kbd>4</kbd> swap</span><span><kbd>G</kbd> quick-use utility</span><span><kbd>B</kbd> emotes</span><span><kbd>Esc</kbd> pause</span><span>Weapons only work inside the Duel Zone</span>
     </div>
     <p class="note" id="touchNote" hidden>This game needs a keyboard and mouse. Open it on a computer to play.</p>
   </div>
@@ -561,6 +570,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
   <div class="vinfo"><span class="vname" id="vicName">YOU</span><span class="vscore" id="vicScore">5 – 0</span></div>
 </div>
 
+<div id="emoteWheel" hidden aria-label="Emote wheel"></div>
 <div id="announce" role="status" aria-live="assertive" hidden><div class="al">ANNOUNCEMENT</div><div class="at"></div></div>
 
 <div id="admin" class="overlay" hidden>
@@ -1324,7 +1334,7 @@ function nameColor(n) { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt
 function makeRemote(peer, name) {
   const mesh = makeBody(nameColor(name), 0x2a2f45);
   const outlines = []; mesh.traverse(o => { if (o.material === outlineMat) outlines.push(o); });
-  const r = { remote: true, peer, name: '', pos: new V3(LX, 0, LZ), tgt: new V3(LX, 0, LZ), yaw: 0, tyaw: 0, pitch: 0, ck: 0, hp: 100, max: 100, alive: true, inZone: false, mesh, outlines, label: null, walk: 0, prev: new V3() };
+  const r = { remote: true, peer, name: '', pos: new V3(LX, 0, LZ), tgt: new V3(LX, 0, LZ), em: -1, emT: 0, yaw: 0, tyaw: 0, pitch: 0, ck: 0, hp: 100, max: 100, alive: true, inZone: false, mesh, outlines, label: null, walk: 0, prev: new V3() };
   setRemoteName(r, name);
   return r;
 }
@@ -1350,6 +1360,8 @@ function syncPeers() {
     r.tgt.set(num(pr.x, LX), num(pr.y), num(pr.z, LZ));
     r.tyaw = num(pr.yw); r.pitch = clamp(num(pr.pt), -1.6, 1.6); r.ck = clamp(num(pr.ck), 0, 1);
     r.hp = clamp(num(pr.hp, 100), 0, 100); r.alive = !pr.dd; r.inZone = !!pr.zn;
+    const em = Number.isInteger(pr.em) && pr.em >= 0 && pr.em < EMOTES.length ? pr.em : -1;
+    if (em !== r.em) { r.em = em; r.emT = 0; }
   }
   for (const [k, r] of lobby.remotes) if (!seen.has(k)) { scene.remove(r.mesh); lobby.remotes.delete(k); }
   lobby.others = here;
@@ -1507,9 +1519,17 @@ function updateLobby(dt) {
     const spd = Math.hypot(r.pos.x - r.prev.x, r.pos.z - r.prev.z) / Math.max(dt, 1e-3);
     r.walk += spd * dt * 1.7;
     const u = r.mesh.userData, sw = Math.sin(r.walk) * 0.7 * Math.min(1, spd / 4);
-    u.legL.rotation.x = sw; u.legR.rotation.x = -sw; u.armL.rotation.x = -sw * 0.8;
-    u.armR.rotation.x = Math.PI / 2 + r.pitch; u.head.rotation.x = r.pitch * 0.5;
-    r.mesh.position.copy(r.pos); r.mesh.rotation.y = r.yaw; r.mesh.scale.y = 1 - 0.35 * r.ck;
+    r.mesh.position.copy(r.pos);
+    if (r.em >= 0 && r.alive) {
+      r.emT = (r.emT || 0) + dt;
+      const o = poseEmote(r.mesh, r.em, r.emT);
+      r.mesh.position.y += o.y; r.mesh.rotation.set(0, r.yaw + o.ry, o.rz); r.mesh.scale.y = 1;
+    } else {
+      u.gun.visible = true;
+      u.legL.rotation.set(sw, 0, 0); u.legR.rotation.set(-sw, 0, 0); u.armL.rotation.set(-sw * 0.8, 0, 0);
+      u.armR.rotation.set(Math.PI / 2 + r.pitch, 0, 0); u.head.rotation.set(r.pitch * 0.5, 0, 0);
+      r.mesh.rotation.set(0, r.yaw, 0); r.mesh.scale.y = 1 - 0.35 * r.ck;
+    }
     r.mesh.visible = r.alive;
     const hostile = r.inZone && p.inZone;
     for (const o of r.outlines) o.visible = hostile;
@@ -1528,7 +1548,7 @@ function updateLobby(dt) {
   if (lobby.room && lobby.sendT <= 0) {
     lobby.sendT = 0.08;
     lobby.room.presence({ md: 'lobby', nm: myName || 'Player', x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
-      yw: +p.yaw.toFixed(3), pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1 }).catch(() => {});
+      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1 }).catch(() => {});
   }
   if (lobby.flushT <= 0) { lobby.flushT = 0.12; if (lobby.pending.size) flushHits(); }
   // HUD
@@ -2222,6 +2242,7 @@ function startMatch() {
   startRound();
 }
 function clearProjectiles() {
+  stopEmote(); closeWheel();
   // leaving a match mid-celebration (pause → lobby/quit) must not leave the dancing winner behind
   if (winner) winner.visible = false; $('#victory').hidden = true;
   grenades.forEach(g => scene.remove(g.mesh)); grenades.length = 0;
@@ -2257,6 +2278,7 @@ let winner = null, winnerTag = null;
 const CONF_COLS = [0xffd23f, 0x2f9bff, 0xff3b4e, 0x4be37a, 0xffffff];
 const VIC_LEN = 5.2;
 function startVictory() {
+  stopEmote(); closeWheel();
   S.mode = 'victory'; S.t = VIC_LEN; S.vicConf = 0.6; S.vicFw = 1.2;
   if (!winner) {
     winner = makeBody(0x2f8cff, 0x1d3a6b);
@@ -2298,6 +2320,98 @@ function updateVictory(dt) {
   }
   if (S.t <= 0) endVictory();
 }
+/* ---------- Emotes ---------- */
+// B opens the emote wheel; move the mouse toward an emote and click (or press 1–6).
+// While emoting the camera swings round to show your character; moving, jumping or firing stops it.
+// In the lobby, everyone else sees your emote too (sent with your presence as `em`).
+const EMOTES = [
+  { k: 'wave', name: 'Wave', len: 2.4 }, { k: 'floss', name: 'Floss', len: 0 }, { k: 'cheer', name: 'Cheer', len: 2.6 },
+  { k: 'flex', name: 'Flex', len: 2.4 }, { k: 'sit', name: 'Sit', len: 0 }, { k: 'spin', name: 'Spin', len: 1.8 }
+];
+const emo = { open: false, sel: -1, ax: 0, ay: 0, cur: -1, t: 0, yaw: 0, body: null };
+// pose a body for emote i at time t; returns body offsets {y, ry, rz}
+function poseEmote(mesh, i, t) {
+  const u = mesh.userData, PI = Math.PI;
+  u.gun.visible = false;
+  u.armL.rotation.set(0, 0, 0); u.armR.rotation.set(0, 0, 0); u.legL.rotation.set(0, 0, 0); u.legR.rotation.set(0, 0, 0); u.head.rotation.set(0, 0, 0);
+  let y = 0, ry = 0, rz = 0;
+  const e = EMOTES[i] && EMOTES[i].k;
+  if (e === 'wave') { u.armR.rotation.z = 2.7 + Math.sin(t * 9) * 0.35; u.armL.rotation.z = -0.1; u.head.rotation.z = Math.sin(t * 9) * 0.05; }
+  else if (e === 'floss') {
+    const sn = Math.sin(t * 7), cs = Math.cos(t * 7);
+    u.armL.rotation.set(cs * 0.5, 0, sn * 0.55); u.armR.rotation.set(-cs * 0.5, 0, sn * 0.55);
+    rz = -sn * 0.08; y = Math.abs(sn) * 0.04; u.head.rotation.z = sn * 0.06;
+  } else if (e === 'cheer') {
+    const pump = Math.abs(Math.sin(t * 9));
+    u.armL.rotation.set(PI * (0.82 + pump * 0.12), 0, -0.3); u.armR.rotation.set(PI * (0.82 + pump * 0.12), 0, 0.3);
+    y = Math.abs(Math.sin(t * 4.5)) * 0.35; u.head.rotation.x = -0.2;
+  } else if (e === 'flex') {
+    const b = Math.sin(t * 6) * 0.12;
+    u.armL.rotation.set(0.15, 0, -2.0 - b); u.armR.rotation.set(0.15, 0, 2.0 + b); u.head.rotation.x = -0.15; y = Math.abs(b) * 0.2;
+  } else if (e === 'sit') {
+    y = -0.6; u.legL.rotation.x = PI / 2; u.legR.rotation.x = PI / 2;
+    u.armL.rotation.set(0.5, 0, -0.15); u.armR.rotation.set(0.5, 0, 0.15); u.head.rotation.y = Math.sin(t * 0.8) * 0.4;
+  } else if (e === 'spin') {
+    const k = Math.min(1, t / 1.8), ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    ry = ease * PI * 4; u.armL.rotation.z = -1.5; u.armR.rotation.z = 1.5; y = Math.sin(PI * k) * 0.25;
+  }
+  return { y, ry, rz };
+}
+function canEmote() { return player.alive && (S.mode === 'lobby' || S.mode === 'live' || S.mode === 'countdown') && !S.paused; }
+function startEmote(i) {
+  closeWheel();
+  if (!EMOTES[i] || !canEmote()) return;
+  if (!emo.body) { emo.body = makeBody(0x2f8cff, 0x1d3a6b); emo.body.traverse(o => { if (o.material === outlineMat) o.visible = false; }); }
+  emo.cur = i; emo.t = 0; emo.yaw = player.yaw; emo.body.visible = true; emo.body.position.copy(player.pos); emo.body.rotation.set(0, emo.yaw, 0);
+  mouse.l = false; mouse.consumed = true; aiming = false;
+  if (S.mode === 'lobby') lobby.sendT = 0;
+}
+function stopEmote() {
+  if (emo.cur < 0) return;
+  emo.cur = -1; if (emo.body) emo.body.visible = false;
+  if (S.mode === 'lobby') lobby.sendT = 0;
+}
+function updateEmote(dt) {
+  if (emo.cur < 0) return;
+  const moving = keys.KeyW || keys.KeyA || keys.KeyS || keys.KeyD || keys.Space || keys.KeyC || keys.ControlLeft || keys.ControlRight;
+  if (!player.alive || !canEmote() || moving || mouse.l || aiming) {
+    if (mouse.l) { mouse.l = false; mouse.consumed = true; } // the click that cancels shouldn't also shoot
+    aiming = false; stopEmote(); return;
+  }
+  emo.t += dt;
+  const E = EMOTES[emo.cur];
+  if (E.len && emo.t >= E.len) { stopEmote(); return; }
+  const o = poseEmote(emo.body, emo.cur, emo.t);
+  emo.body.position.set(player.pos.x, player.pos.y + o.y, player.pos.z);
+  emo.body.rotation.set(0, emo.yaw + o.ry, o.rz);
+}
+function openWheel() {
+  if (!canEmote()) return;
+  emo.open = true; emo.sel = -1; emo.ax = emo.ay = 0;
+  $('#emoteWheel').hidden = false; renderWheel();
+}
+function closeWheel() { emo.open = false; $('#emoteWheel').hidden = true; }
+function renderWheel() {
+  const items = $('#emoteWheel').querySelectorAll('.em');
+  items.forEach((el, i) => el.classList.toggle('on', i === emo.sel));
+}
+function wheelAim(dx, dy) {
+  emo.ax += dx; emo.ay += dy;
+  const L = Math.hypot(emo.ax, emo.ay);
+  if (L > 140) { emo.ax *= 140 / L; emo.ay *= 140 / L; }
+  if (L < 25) { if (emo.sel !== -1) { emo.sel = -1; renderWheel(); } return; }
+  const a = Math.atan2(emo.ax, -emo.ay), n = EMOTES.length;
+  const sel = ((Math.round(a / (Math.PI * 2 / n)) % n) + n) % n;
+  if (sel !== emo.sel) { emo.sel = sel; renderWheel(); }
+}
+(function buildWheel() {
+  const w = $('#emoteWheel'), n = EMOTES.length;
+  w.innerHTML = '<div class="emc">EMOTES<small>B to close</small></div>' + EMOTES.map((e, i) => {
+    const a = i / n * Math.PI * 2, x = Math.sin(a) * 112, y = -Math.cos(a) * 112;
+    return `<div class="em" style="transform:translate(calc(-50% + ${x.toFixed(1)}px), calc(-50% + ${y.toFixed(1)}px))"><kbd>${i + 1}</kbd><span>${e.name}</span></div>`;
+  }).join('');
+})();
+
 function endVictory() {
   if (winner) winner.visible = false;
   $('#victory').hidden = true;
@@ -2803,6 +2917,7 @@ function accelerate(f, wish, dt) {
 /* ---------- Player ---------- */
 function updatePlayer(dt) {
   const p = player;
+  updateEmote(dt);
   const key = p.loadout[p.slot], w = W[key];
   if (p.alive && S.mode !== 'countdown') {
     const fwd = new V3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw)), right = new V3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
@@ -2943,7 +3058,7 @@ function updateHud(dt = 0) {
   const ci = $('#cross').children;
   ci[0].style.top = (-gap - 9) + 'px'; ci[1].style.top = gap + 'px'; ci[2].style.left = (-gap - 9) + 'px'; ci[3].style.left = gap + 'px';
   const scoped = ads && w.scope && p.reloadT <= 0;
-  $('#cross').style.opacity = scoped ? 0 : 1;
+  $('#cross').style.opacity = scoped || emo.cur >= 0 ? 0 : 1;
   $('#scope').style.opacity = scoped ? 1 : 0;
   hitT = Math.max(0, hitT - dt); const hm = $('#hitmark'); hm.style.opacity = hitT > 0 ? 1 : 0; hm.style.transform = `translate(-50%,-50%) rotate(45deg) scale(${1 + hitT})`;
   S.hurt = Math.max(0, (S.hurt || 0) - dt * 1.6); $('#vign').style.opacity = Math.max(S.hurt * 0.8, p.hp < 30 && p.alive ? 0.35 : 0, !p.alive ? 0.7 : 0);
@@ -2977,6 +3092,16 @@ function updateCamera(dt) {
     camera.position.set(c.x + f.x * dist, c.y + 1.45 - ease * 0.2, c.z + f.z * dist);
     camera.rotation.set(0, 0, 0); camera.lookAt(c.x, c.y + 1.25, c.z);
     camera.fov += (50 - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
+    vmRoot.visible = false; return;
+  }
+  if (emo.cur >= 0 && p.alive) {
+    // third-person view of your emote; the mouse orbits the camera around you
+    const f = dirOf(p.yaw, 0), chest = new V3(p.pos.x, p.pos.y + 1.2, p.pos.z);
+    const want = 3.8, back = new V3(f.x, 0.22, f.z).normalize();
+    const dist = Math.max(1.2, Math.min(want, worldRay(chest, back, want) - 0.3));
+    camera.position.copy(chest).addScaledVector(back, dist);
+    camera.rotation.set(0, 0, 0); camera.lookAt(chest);
+    camera.fov += (62 - camera.fov) * Math.min(1, dt * 6); camera.updateProjectionMatrix();
     vmRoot.visible = false; return;
   }
   let dropY = 0, roll = 0;
@@ -3078,12 +3203,13 @@ document.addEventListener('pointerlockchange', () => {
   if (!locked() && (S.mode === 'live' || S.mode === 'countdown' || S.mode === 'roundEnd' || S.mode === 'lobby') && !S.paused && !S.inShop && !S.inAdmin) pause();
 });
 document.addEventListener('pointerlockerror', () => { noLock = true; });
-function pause() { S.paused = true; mouse.l = false; aiming = false; $('#pause').hidden = false; }
+function pause() { S.paused = true; mouse.l = false; aiming = false; closeWheel(); $('#pause').hidden = false; }
 function resume() { S.paused = false; $('#pause').hidden = true; last = performance.now(); lock(); }
 
 document.addEventListener('mousemove', e => {
   if (S.paused || S.mode === 'menu') return;
   if (!locked() && !noLock) return;
+  if (emo.open) { wheelAim(e.movementX, e.movementY); return; }
   const w = W[player.loadout[player.slot]];
   const k = 0.0022 * sens * (aiming && w.ads ? (w.scope ? 0.3 : 0.75) : 1);
   player.yaw = wrap(player.yaw - e.movementX * k);
@@ -3092,6 +3218,7 @@ document.addEventListener('mousemove', e => {
 canvas.addEventListener('mousedown', e => {
   if (S.paused || S.mode === 'menu') return;
   if (!locked() && !noLock) { lock(); return; }
+  if (emo.open) { if (e.button === 0 && emo.sel >= 0) startEmote(emo.sel); else closeWheel(); return; }
   if (e.button === 0) { mouse.l = true; mouse.consumed = false; }
   if (e.button === 2) aiming = true;
 });
@@ -3112,6 +3239,8 @@ addEventListener('keydown', e => {
   if (e.code === 'KeyK' && ownerMode && !e.repeat) { openAdmin(); return; }
   if (e.code === 'ControlLeft' || e.code === 'ControlRight') e.preventDefault();
   if ((e.code === 'ControlLeft' || e.code === 'ControlRight') && !e.repeat) tryDash(player, player.moveDir || dirOf(player.yaw, 0));
+  if (e.code === 'KeyB' && !e.repeat) { if (emo.open) closeWheel(); else openWheel(); return; }
+  if (emo.open && /^Digit[1-6]$/.test(e.code)) { startEmote(+e.code.slice(5) - 1); return; }
   if (/^Digit[1-4]$/.test(e.code)) switchSlot(player, +e.code.slice(5) - 1);
   // G: quick-use whatever is in the utility slot without switching to it
   if (e.code === 'KeyG' && canFight(player) && player.cd <= 0 && player.alive && !e.repeat) {
