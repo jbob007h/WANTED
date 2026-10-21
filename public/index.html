@@ -2731,54 +2731,68 @@ const auraTex = []; let auraHead = null;
 // 104 BPM so each face change lands on a big 808 hit (every 8 sixteenths).
 function playAuraTrack(delay) {
   if (!ac || !master) return null;
-  const bus = ac.createGain(); bus.gain.value = 0.62; bus.connect(master);
-  const dirt = ac.createWaveShaper(), curve = new Float32Array(1024);
-  for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 5) / Math.tanh(5); }
-  dirt.curve = curve; const dirtOut = ac.createGain(); dirtOut.gain.value = 0.55; dirt.connect(dirtOut); dirtOut.connect(bus);
-  const S16 = 60 / 104 / 4, T0 = ac.currentTime + delay, at = st => T0 + st * S16;
-  const env = (g, t, peak, dec) => { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dec); };
-  const cowbell = (t, f, len) => {
-    const g = ac.createGain(), bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.25; bp.Q.value = 2.5;
-    for (const m of [1, 1.483]) { const o = ac.createOscillator(); o.type = 'square'; o.frequency.value = f * m; o.connect(bp); o.start(t); o.stop(t + len + 0.05); }
-    bp.connect(g); env(g, t, 0.32, Math.max(0.12, len)); g.connect(bus); g.connect(dirt);
+  const S16 = 60 / 104 / 4, T0 = ac.currentTime + delay, at = st => T0 + st * S16, END = 34;
+  // master chain: everything -> pump (sidechain duck on each kick) -> crunchy saturation -> bus
+  const bus = ac.createGain(); bus.gain.value = 0.5; bus.connect(master);
+  const shape = (drive) => { const c = new Float32Array(2048); for (let i = 0; i < 2048; i++) { const x = i / 1024 - 1; c[i] = Math.tanh(x * drive) / Math.tanh(drive); } return c; };
+  const sat = ac.createWaveShaper(); sat.curve = shape(2.2); sat.connect(bus);
+  const pump = ac.createGain(); pump.gain.value = 1; pump.connect(sat);
+  const dirt = ac.createWaveShaper(); dirt.curve = shape(9); const dirtOut = ac.createGain(); dirtOut.gain.value = 0.5; dirt.connect(dirtOut); dirtOut.connect(sat);
+  // cowbell echo (dotted-eighth delay) like a drift-phonk lead
+  const dly = ac.createDelay(1); dly.delayTime.value = S16 * 3; const fb = ac.createGain(); fb.gain.value = 0.38; const dlyOut = ac.createGain(); dlyOut.gain.value = 0.45;
+  const dlyTone = ac.createBiquadFilter(); dlyTone.type = 'lowpass'; dlyTone.frequency.value = 2600;
+  dly.connect(dlyTone); dlyTone.connect(fb); fb.connect(dly); dlyTone.connect(dlyOut); dlyOut.connect(pump);
+  const env = (g, t, peak, dec) => { g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(peak, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + dec); };
+  const duck = t => { pump.gain.setValueAtTime(0.28, t); pump.gain.linearRampToValueAtTime(1, t + S16 * 2.2); };
+  const cowbell = (t, f, len, vel = 1) => {
+    const g = ac.createGain(), bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 1.3; bp.Q.value = 2;
+    for (const m of [1, 1.483]) { const o = ac.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(f * m * 1.012, t); o.frequency.exponentialRampToValueAtTime(f * m, t + 0.03); o.connect(bp); o.start(t); o.stop(t + len + 0.05); }
+    bp.connect(g); env(g, t, 0.3 * vel, Math.max(0.09, len)); g.connect(pump); g.connect(dirt); g.connect(dly);
   };
+  const kick = t => { const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(170, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.09); env(g, t, 1, 0.22); o.connect(g); g.connect(dirt); g.connect(sat); o.start(t); o.stop(t + 0.3); duck(t); };
   const b808 = (t, f, len, glide) => {
     const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine';
-    o.frequency.setValueAtTime(f * 5, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.045);
-    if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + len * 0.8);
-    env(g, t, 0.9, len); o.connect(g); g.connect(dirt); o.start(t); o.stop(t + len + 0.05);
+    o.frequency.setValueAtTime(f * 4, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.04);
+    if (glide) { o.frequency.setValueAtTime(f, t + len * 0.45); o.frequency.exponentialRampToValueAtTime(glide, t + len * 0.9); }
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(1, t + 0.005); g.gain.setValueAtTime(0.9, t + len * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g); g.connect(dirt); o.start(t); o.stop(t + len + 0.05);
   };
-  const noiseHit = (t, type, freq, vol, dec) => {
+  const noiseHit = (t, type, freq, vol, dec, dest = pump) => {
     const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
-    src.buffer = noise; fl.type = type; fl.frequency.value = freq; env(g, t, vol, dec);
-    src.connect(fl); fl.connect(g); g.connect(bus); src.start(t); src.stop(t + dec + 0.05);
+    src.buffer = noise; src.playbackRate.value = rand(0.9, 1.1); fl.type = type; fl.frequency.value = freq; env(g, t, vol, dec);
+    src.connect(fl); fl.connect(g); g.connect(dest); src.start(t, rand(0, 0.5)); src.stop(t + dec + 0.05);
   };
-  const snare = t => { noiseHit(t, 'highpass', 1400, 0.55, 0.2); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08); env(g, t, 0.35, 0.1); o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.15); };
-  const hat = (t, v) => noiseHit(t, 'highpass', 7500, v, 0.035);
+  const clap = t => { for (const o of [0, 0.011, 0.024]) noiseHit(t + o, 'bandpass', 1500, 0.5, 0.06, sat); noiseHit(t + 0.03, 'bandpass', 1300, 0.4, 0.22, sat); };
+  const hat = (t, v) => noiseHit(t, 'highpass', 8000, v, 0.03);
+  const open = t => noiseHit(t, 'highpass', 6500, 0.12, 0.18);
   const D5 = 587.33, semi = n => D5 * Math.pow(2, n / 12);
-  // [step, semitones from D5, length in sixteenths]
-  const A = [[0, 0, 2], [3, 3, 1], [4, 0, 2], [6, 5, 2], [8, 3, 2], [10, 0, 1], [11, -2, 1], [12, 0, 2], [14, 7, 2]];
-  const B = [[0, 0, 2], [3, 3, 1], [4, 0, 2], [6, 8, 2], [8, 7, 2], [10, 5, 1], [11, 3, 1], [12, 0, 4]];
-  [A, B, A].forEach((bar, bi) => bar.forEach(([st, n, l]) => { const step = bi * 16 + st; if (step < 34) cowbell(at(step), semi(n), l * S16 * 0.9); }));
-  const bass = [[0, 55, 6], [6, 55, 2, 49], [8, 49, 6], [14, 65.4, 2], [16, 55, 6], [22, 58.3, 2, 49], [24, 49, 6], [30, 43.7, 2, 55], [32, 55, 8]];
-  bass.forEach(([st, f, l, gl]) => b808(at(st), f, l * S16, gl));
+  // the fast 16th-note cowbell riff (my own melody), with accents
+  const RIFF = [[0, 0, 12, 0, 3, 0, 10, 0, 0, 0, 12, 0, 7, 5, 3, -2], [0, 0, 12, 0, 3, 0, 10, 0, 8, 7, 5, 3, 0, -2, 0, 3], [0, 0, 12, 0, 3, 0, 10, 0, 0, 0, 12, 0, 7, 5, 3, -2]];
+  RIFF.forEach((bar, bi) => bar.forEach((n, st) => { const step = bi * 16 + st; if (step >= END - 2) return; cowbell(at(step), semi(n), S16 * 0.85, st % 4 === 0 ? 1.15 : st % 2 === 0 ? 0.95 : 0.7); }));
+  // distorted sliding 808 with a punchy kick on each hit (faces change on steps 0, 8, 16, 24)
+  const bass = [[0, 55, 5, 41.2], [6, 55, 2], [8, 49, 5, 36.7], [14, 65.4, 2, 49], [16, 55, 5, 41.2], [22, 58.3, 2, 43.7], [24, 49, 5, 36.7], [30, 43.7, 2, 55]];
+  bass.forEach(([st, f, l, gl]) => { kick(at(st)); b808(at(st), f, l * S16, gl); });
+  kick(at(3)); kick(at(19)); kick(at(11)); kick(at(27));
+  for (let st = 0; st < END - 2; st++) {
+    if (st % 8 === 4) clap(at(st));
+    hat(at(st), st % 2 ? 0.07 : 0.13);
+    if (st % 8 === 6) open(at(st));
+    if ([7, 15, 23, 29, 30, 31].includes(st)) for (let k = 1; k < 4; k++) hat(at(st + k / 4), 0.06 + k * 0.015);   // trap rolls
+  }
+  // tape crackle under everything
+  for (let k = 0; k < 60; k++) noiseHit(T0 + rand(0, END * S16 + 1.5), 'highpass', 2500, rand(0.04, 0.12), 0.012, bus);
   // risers into each face slam, a crash on it, a cowbell stutter, then a huge sub drop at the end
   const riser = (t, len) => { const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(); src.buffer = noise; src.loop = true;
     fl.type = 'bandpass'; fl.Q.value = 4; fl.frequency.setValueAtTime(400, t); fl.frequency.exponentialRampToValueAtTime(7000, t + len);
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + len); g.gain.setValueAtTime(0.0001, t + len + 0.01);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + len); g.gain.setValueAtTime(0.0001, t + len + 0.01);
     src.connect(fl); fl.connect(g); g.connect(bus); src.start(t); src.stop(t + len + 0.05); };
-  const crash = t => { noiseHit(t, 'highpass', 3000, 0.4, 1.0); noiseHit(t, 'lowpass', 500, 0.6, 0.5); };
+  const crash = t => { noiseHit(t, 'highpass', 3000, 0.35, 1.0, bus); noiseHit(t, 'lowpass', 500, 0.5, 0.5, sat); };
   for (const st of [8, 16, 24]) { riser(at(st - 4), 4 * S16); crash(at(st)); }
-  for (let k = 0; k < 8; k++) cowbell(at(28 + k * 0.5), semi(k % 2 ? 7 : 0), S16 * 0.4);
-  b808(at(32), 55, 1.8, 30);
+  for (let k = 0; k < 8; k++) cowbell(at(28 + k * 0.5), semi(k % 2 ? 12 : 0), S16 * 0.4, 1.1);
+  kick(at(32)); b808(at(32), 55, 1.8, 27.5);
   { const t = at(32), o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(); o.type = o2.type = 'sawtooth';
     o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(90, t + 1.2); o2.frequency.setValueAtTime(893, t); o2.frequency.exponentialRampToValueAtTime(87, t + 1.2);
-    env(g, t, 0.18, 1.2); o.connect(g); o2.connect(g); g.connect(dirt); o.start(t); o2.start(t); o.stop(t + 1.3); o2.stop(t + 1.3); crash(t); }
-  for (let st = 0; st < 34; st++) {
-    if (st % 8 === 4) snare(at(st));
-    if (st % 2 === 0) hat(at(st), st % 4 === 0 ? 0.16 : 0.1);
-    if (st === 14 || st === 15 || st === 30 || st === 31) { hat(at(st), 0.09); hat(at(st + 0.5), 0.08); }
-  }
+    env(g, t, 0.14, 1.2); o.connect(g); o2.connect(g); g.connect(dirt); o.start(t); o2.start(t); o.stop(t + 1.3); o2.stop(t + 1.3); crash(t); }
   return bus;
 }
 function clearAura() {
