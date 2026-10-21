@@ -481,7 +481,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
   <div id="score">
     <div class="team you"><div class="ava"></div><span class="tn" id="youTag">YOU</span><span class="num" id="sYou">0</span></div>
     <div class="mid"><div class="rnd" id="roundLbl">ROUND 1</div><div class="pips"><span id="pYou"></span><span id="pBot"></span></div></div>
-    <div class="team bot"><div class="ava"></div><span class="tn">BOT</span><span class="num" id="sBot">0</span></div>
+    <div class="team bot"><div class="ava"></div><span class="tn" id="botTag">BOT</span><span class="num" id="sBot">0</span></div>
   </div>
   <div id="feed"></div>
   <div id="lobbyBar" hidden><span class="lb-title">LOBBY</span><span class="lb-online" id="lbOnline">Solo</span><span class="lb-zone" id="lbZone">SAFE</span></div>
@@ -1182,7 +1182,7 @@ const player = makeFighter(false), bot = makeFighter(true);
 const LX = 300, LZ = 0;
 const ZONE = { x0: LX - 14, x1: LX + 14, z0: LZ - 32, z1: LZ - 4 };
 const SPAWN = new V3(LX, 0, LZ + 22);
-const PADS = { bot: new V3(LX + 18, 0, LZ + 12), shop: new V3(LX - 18, 0, LZ + 12) };
+const PADS = { bot: new V3(LX + 18, 0, LZ + 12), shop: new V3(LX - 18, 0, LZ + 12), pvp: new V3(LX + 18, 0, LZ + 1) };
 const lobby = { remotes: new Map(), dummies: [], pads: {}, room: null, myPeer: null, sendT: 0, padT: 0, padKey: null, padArmed: true,
   respawnT: 0, lastShot: 0, flushT: 0, pending: new Map(), barTarget: null, time: 0 };
 
@@ -1265,9 +1265,11 @@ function buildLobby() {
   // pads
   lobby.pads.bot = makePad(PADS.bot, 0xff3b4e);
   lobby.pads.shop = makePad(PADS.shop, 0xffd23f);
+  lobby.pads.pvp = makePad(PADS.pvp, 0x9b6bff);
+  const ps = makeSign(['PLAYER DUEL', 'Wait here for a challenger'], '#9b6bff', 4.6, 1.5); ps.position.set(PADS.pvp.x, 3.2, PADS.pvp.z - 2.4); scene.add(ps);
   const bs = makeSign(['BOT DUEL', 'Stand on the pad'], '#2f9bff', 4.6, 1.5); bs.position.set(PADS.bot.x, 3.2, PADS.bot.z - 2.4); scene.add(bs);
   const ss = makeSign(['SHOP', 'Stand on the pad'], '#e0a400', 4.6, 1.5); ss.position.set(PADS.shop.x, 3.2, PADS.shop.z - 2.4); scene.add(ss);
-  for (const p of [PADS.bot, PADS.shop]) for (const sx of [-1, 1]) addBox(p.x + sx * 2.1, 0, p.z - 2.4, 0.25, 2.5, 0.25);
+  for (const p of [PADS.bot, PADS.shop, PADS.pvp]) for (const sx of [-1, 1]) addBox(p.x + sx * 2.1, 0, p.z - 2.4, 0.25, 2.5, 0.25);
   const title = makeSign(['WANTED', 'LOBBY'], '#ff3b4e', 14, 3.6); title.position.set(LX, 7.2, LZ - 32.0); scene.add(title);
 }
 buildLobby();
@@ -1413,10 +1415,11 @@ function lobbyTargets() {
   return out;
 }
 function enemiesOf(f) {
+  if (S.pvp) return f === player && duelOpp && duelOpp.alive ? [duelOpp] : [];
   if (S.mode === 'lobby') return f === player ? lobbyTargets() : [];
   return [f === bot ? player : bot];
 }
-function netEmit(topic, data) { if (lobby.room && S.mode === 'lobby') lobby.room.emit(topic, data).catch(() => {}); }
+function netEmit(topic, data) { if (lobby.room && (S.mode === 'lobby' || S.pvp)) lobby.room.emit(topic, data).catch(() => {}); }
 function setNetMode(md) { if (lobby.room) lobby.room.presence({ md }).catch(() => {}); }
 const v3a = v => [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
 const num = (v, d = 0) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
@@ -1444,6 +1447,8 @@ function hitDummy(t, amt, head, at, quiet) {
 // damage on another real player is sent to them; their page applies it to itself
 function hitRemote(t, amt, head, at, quiet, kb) {
   if (!t.alive || !t.inZone || !player.inZone) return;
+  if (S.pvp && S.mode !== 'live') return;
+  if (S.pvp) { stats.dmg += amt; if (head) stats.heads++; }
   t.hp = Math.max(0, t.hp - amt);
   hitFeedback(t, amt, head, at, quiet, t.hp <= 0);
   const p = lobby.pending.get(t.peer) || { d: 0, h: 0, q: 1, k: null, b: 0 };
@@ -1507,6 +1512,7 @@ function syncPeers() {
   for (const p of room.peers()) {
     if (p.sameTab) { lobby.myPeer = p.peer; continue; }
     if (p.isMe || p.kind !== 'viewer') continue;
+    if (S.pvp && duelOpp && p.peer === S.pvp.opp) { syncDuelPeer(p); continue; }
     const pr = p.presence || {};
     if (pr.md !== 'lobby') continue;
     here++; seen.add(p.peer);
@@ -1523,11 +1529,33 @@ function syncPeers() {
   for (const [k, r] of lobby.remotes) if (!seen.has(k)) { scene.remove(r.mesh); lobby.remotes.delete(k); }
   lobby.others = here;
 }
+// smooth a real player's body toward their latest network state and animate walking or emoting
+function animRemote(r, dt, k) {
+  r.prev.copy(r.pos);
+  if (r.pos.distanceTo(r.tgt) > 6) r.pos.copy(r.tgt); else r.pos.lerp(r.tgt, k);
+  r.yaw = wrap(r.yaw + wrap(r.tyaw - r.yaw) * k);
+  const spd = Math.hypot(r.pos.x - r.prev.x, r.pos.z - r.prev.z) / Math.max(dt, 1e-3);
+  r.walk += spd * dt * 1.7;
+  const u = r.mesh.userData, sw = Math.sin(r.walk) * 0.7 * Math.min(1, spd / 4);
+  r.mesh.position.copy(r.pos);
+  if (r.em >= 0 && r.alive) {
+    r.emT = (r.emT || 0) + dt;
+    const o = poseEmote(r.mesh, r.em, r.emT);
+    r.mesh.position.y += o.y; r.mesh.rotation.set(0, r.yaw + o.ry, o.rz); r.mesh.scale.y = 1;
+  } else {
+    u.gun.visible = true;
+    u.legL.rotation.set(sw, 0, 0); u.legR.rotation.set(-sw, 0, 0); u.armL.rotation.set(-sw * 0.8, 0, 0);
+    u.armR.rotation.set(Math.PI / 2 + r.pitch, 0, 0); u.head.rotation.set(r.pitch * 0.5, 0, 0);
+    r.mesh.rotation.set(0, r.yaw, 0); r.mesh.scale.y = 1 - 0.35 * r.ck;
+  }
+}
 function onNetHit(msg) {
   if (msg.sameTab) return;
   const d = msg.data; if (!d || typeof d !== 'object' || d.to !== lobby.myPeer) return;
-  if (S.mode !== 'lobby' || !player.inZone || !player.alive) return;
-  const att = lobby.remotes.get(msg.peer) || null;
+  const duel = S.pvp && msg.peer === S.pvp.opp;
+  if (duel) { if (S.mode !== 'live' || !player.alive) return; S.pvp.seen = performance.now(); }
+  else if (S.mode !== 'lobby' || !player.inZone || !player.alive) return;
+  const att = duel ? duelOpp : lobby.remotes.get(msg.peer) || null;
   if (vecOk(d.k)) { player.vel.x += clamp(d.k[0], -25, 25); player.vel.y += clamp(d.k[1], -5, 25); player.vel.z += clamp(d.k[2], -25, 25); player.onGround = false; player.pos.y += 0.02; }
   const amt = clamp(num(d.d), 0, 200);
   if (amt > 0) damage(player, amt, att || { pos: player.pos.clone() , remote: false }, !!d.h, null, !!d.q);
@@ -1535,6 +1563,15 @@ function onNetHit(msg) {
 }
 function onNetKo(msg) {
   const d = msg.data; if (!d || typeof d !== 'object') return;
+  if (typeof d.dv === 'string') {
+    // a knockout inside a player duel: only the two duelists care
+    if (!S.pvp || d.dv !== S.pvp.id || msg.sameTab || msg.peer !== S.pvp.opp || d.k !== lobby.myPeer || S.mode !== 'live') return;
+    S.pvp.seen = performance.now();
+    if (duelOpp) { duelOpp.alive = false; duelOpp.hp = 0; burst(duelOpp.pos.clone().setY(duelOpp.pos.y + 1.1), [0xff4b5c, 0xf2c79b, 0x2a2f45, 0xffd23f], 34, 8, 0.18, 1.2); }
+    S.shake = Math.max(S.shake, 0.25);
+    endRound(player, !!d.h);
+    return;
+  }
   const safe = n => (typeof n === 'string' && NAME_RE.test(n) ? n : 'Player');
   const kn = typeof d.kn === 'string' && (NAME_RE.test(d.kn) || d.kn === 'The zone') ? d.kn : 'Player', vn = safe(d.vn);
   const mine = d.k && d.k === lobby.myPeer;
@@ -1546,7 +1583,9 @@ function onNetKo(msg) {
   }
 }
 function onNetShot(msg) {
-  if (msg.sameTab || S.mode !== 'lobby') return;
+  if (msg.sameTab) return;
+  if (S.pvp) { if (msg.peer !== S.pvp.opp) return; S.pvp.seen = performance.now(); }
+  else if (S.mode !== 'lobby' || !lobby.remotes.has(msg.peer)) return;
   const d = msg.data; if (!d || !vecOk(d.a)) return;
   const a = new V3(...d.a);
   if (d.f && vecOk(d.d)) {
@@ -1564,7 +1603,9 @@ function onNetShot(msg) {
   sfx(typeof d.w === 'string' && W[d.w] && !W[d.w].proj ? d.w : 'rifle', distVol(a));
 }
 function onNetProj(msg) {
-  if (msg.sameTab || S.mode !== 'lobby') return;
+  if (msg.sameTab) return;
+  if (S.pvp) { if (msg.peer !== S.pvp.opp) return; S.pvp.seen = performance.now(); }
+  else if (S.mode !== 'lobby' || !lobby.remotes.has(msg.peer)) return;
   const d = msg.data; if (!d || !vecOk(d.p) || !vecOk(d.v)) return;
   const kind = d.k === 'rocket' ? 'rocket' : 'flare';
   let mesh;
@@ -1574,7 +1615,9 @@ function onNetProj(msg) {
   projs.push({ kind, p, v: new V3(...d.v), grav: kind === 'rocket' ? 0 : 8, owner: null, mesh, t: 4, trail: 0, w: W[kind === 'rocket' ? 'rpg' : 'flare'], visual: true });
 }
 function onNetBoom(msg) {
-  if (msg.sameTab || S.mode !== 'lobby') return;
+  if (msg.sameTab) return;
+  if (S.pvp) { if (msg.peer !== S.pvp.opp) return; S.pvp.seen = performance.now(); }
+  else if (S.mode !== 'lobby' || !lobby.remotes.has(msg.peer)) return;
   const d = msg.data; if (!d || !vecOk(d.p)) return;
   explode(new V3(...d.p), null, { radius: clamp(num(d.r, 6), 2, 8) });
 }
@@ -1587,8 +1630,124 @@ function netFlame(a, dir) {
   netEmit('shot', { f: 1, a: v3a(a), d: v3a(dir) });
 }
 
+/* ---------- Player Duel: first to 5 against another real player ---------- */
+// Matchmaking uses presence only: everyone standing on a Player Duel pad advertises q:1. Each page sorts the
+// waiting players the same way and pairs them off, so both sides pick each other without a server.
+// During the duel each page is in charge of its own health: hits are sent with 'hit', and whoever is knocked
+// out announces it with 'ko' (carrying the duel id), which ends the round on both screens.
+let duelOpp = null;
+function queuedPeers() {
+  const room = lobby.room; if (!room || !lobby.myPeer) return [];
+  const out = [{ peer: lobby.myPeer, mp: mapPick }];
+  for (const p of room.peers()) {
+    if (p.sameTab || p.isMe || p.kind !== 'viewer') continue;
+    const pr = p.presence || {};
+    if (pr.md === 'lobby' && pr.q === 1 && !pr.dd) out.push({ peer: p.peer, mp: pr.mp, nm: pr.nm, ch: pr.ch });
+  }
+  return out.sort((a, b) => (a.peer < b.peer ? -1 : 1));
+}
+const duelId = (a, b) => (a < b ? a + '~' + b : b + '~' + a);
+function duelMap(id, lowMp) {
+  if (typeof lowMp === 'string' && MAPS[lowMp]) return lowMp;
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return MAP_KEYS[h % MAP_KEYS.length];
+}
+function findDuel() {
+  const room = lobby.room; if (!room || !lobby.myPeer || !player.alive) return false;
+  const me = lobby.myPeer;
+  // someone already started a duel with me: join it
+  for (const p of room.peers()) {
+    const pr = p.presence || {};
+    if (p.sameTab || pr.md !== 'duel' || typeof pr.dv !== 'string') continue;
+    const parts = pr.dv.split('~');
+    if (parts.length === 2 && parts.includes(me) && parts.includes(p.peer) && duelId(me, p.peer) === pr.dv) {
+      const nm = typeof pr.nm === 'string' && NAME_RE.test(pr.nm) ? pr.nm : 'Player';
+      startPvp(p.peer, nm, pr.dmap);
+      return true;
+    }
+  }
+  // otherwise pair off everyone waiting, in the same order on every page
+  const q = queuedPeers(), i = q.findIndex(x => x.peer === me);
+  if (i < 0) return false;
+  const j = i ^ 1;
+  if (j >= q.length) { setChallenge(null); return false; }
+  const opp = q[j], low = q[Math.min(i, j)];
+  // both pages must pick each other before the duel starts (their lists can briefly differ)
+  setChallenge(opp.peer);
+  if (opp.ch !== me) return false;
+  const nm = typeof opp.nm === 'string' && NAME_RE.test(opp.nm) ? opp.nm : 'Player';
+  startPvp(opp.peer, nm, duelMap(duelId(me, opp.peer), low.mp === 'random' ? null : low.mp));
+  return true;
+}
+function setChallenge(peer) {
+  if (lobby.challenge === peer) return;
+  lobby.challenge = peer; lobby.sendT = 0;
+}
+function startPvp(oppPeer, oppName, map) {
+  const id = duelId(lobby.myPeer, oppPeer);
+  if (!MAPS[map]) map = duelMap(id, null);
+  initAudio(); clearProjectiles(); endPvp(true);
+  $('#menu').hidden = true; $('#end').hidden = true; $('#pause').hidden = true; $('#hud').hidden = false;
+  $('#score').hidden = false; $('#lobbyBar').hidden = true; $('#padTip').hidden = true;
+  S.paused = false; S.inShop = false; lastSlots = ''; lobby.queued = false; lobby.challenge = null;
+  for (const r of lobby.remotes.values()) r.mesh.visible = false;
+  bot.mesh.visible = false; bot.alive = false;
+  S.pvp = { opp: oppPeer, name: oppName, id, map, side: lobby.myPeer < oppPeer ? 0 : 1, seen: performance.now(), sendT: 0 };
+  duelOpp = makeRemote(oppPeer, oppName); duelOpp.inZone = true;
+  for (const o of duelOpp.outlines) o.visible = true;
+  $('#botTag').textContent = oppName.length > 10 ? oppName.slice(0, 9) + '…' : oppName;
+  S.map = map; useMap(map);
+  sendDuelPresence();
+  startMatch();
+  addFeed(`<span class="hs">Player duel</span> vs <span class="bot">${oppName}</span>`);
+  lock();
+}
+function oppSpawn() { return S.pvp.side === 0 ? [0, -20, Math.PI] : [0, 20, 0]; }
+function sendDuelPresence() {
+  const p = player; if (!lobby.room || !S.pvp) return;
+  lobby.room.presence({ md: 'duel', dv: S.pvp.id, dmap: S.pvp.map, nm: myName || 'Player', q: 0, x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
+    yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: 1, dd: p.alive ? 0 : 1 }).catch(() => {});
+}
+function updateDuel(dt) {
+  if (!S.pvp || !duelOpp) return;
+  S.pvp.sendT -= dt; lobby.flushT -= dt;
+  if (S.pvp.sendT <= 0) { S.pvp.sendT = 0.08; sendDuelPresence(); }
+  if (lobby.flushT <= 0) { lobby.flushT = 0.1; if (lobby.pending.size) flushHits(); }
+  animRemote(duelOpp, dt, 1 - Math.exp(-14 * dt));
+  duelOpp.mesh.visible = duelOpp.alive;
+  // opponent closed the game or went back to the lobby: you win by forfeit
+  if (performance.now() - S.pvp.seen > 5000 && (S.mode === 'live' || S.mode === 'countdown' || S.mode === 'roundEnd') && !S.over) {
+    S.you = Math.max(S.you, WIN); updateScore();
+    setBanner('OPPONENT LEFT', 'You win by forfeit', 'win'); S.mode = 'roundEnd'; S.t = 2.2; S.over = true;
+  }
+}
+function syncDuelPeer(p) {
+  const pr = p.presence || {};
+  if (pr.md !== 'duel' || pr.dv !== S.pvp.id) return;
+  S.pvp.seen = performance.now();
+  const r = duelOpp;
+  r.tgt.set(num(pr.x), num(pr.y), num(pr.z));
+  r.tyaw = num(pr.yw); r.pitch = clamp(num(pr.pt), -1.6, 1.6); r.ck = clamp(num(pr.ck), 0, 1);
+  r.hp = clamp(num(pr.hp, 100), 0, 100);
+  r.alive = S.mode === 'countdown' ? true : !pr.dd;
+  const em = Number.isInteger(pr.em) && pr.em >= 0 && pr.em < EMOTES.length ? pr.em : -1;
+  if (em !== r.em) { r.em = em; r.emT = 0; }
+}
+// my page decided I was knocked out: tell my opponent so their screen ends the round too
+function pvpDeath(src, head) {
+  if (!S.pvp) return;
+  netEmit('ko', { k: S.pvp.opp, kn: S.pvp.name, vn: displayName(), h: head ? 1 : 0, dv: S.pvp.id, r: S.round });
+}
+function endPvp(keepScreen) {
+  if (duelOpp) { scene.remove(duelOpp.mesh); duelOpp = null; }
+  if (S.pvp && lobby.pending.size) flushHits();
+  lobby.pending.clear();
+  S.pvp = null; player.inZone = false;
+  const bt = $('#botTag'); if (bt) bt.textContent = 'BOT';
+}
+
 function enterLobby() {
-  initAudio(); clearProjectiles();
+  initAudio(); clearProjectiles(); endPvp();
   $('#menu').hidden = true; $('#end').hidden = true; $('#pause').hidden = true; $('#namer').hidden = true; $('#hud').hidden = false;
   $('#score').hidden = true; $('#lobbyBar').hidden = false;
   S.mode = 'lobby'; S.paused = false; S.inShop = false; lastSlots = '';
@@ -1603,7 +1762,7 @@ function enterLobby() {
   lock();
 }
 function startBotMatch() {
-  initAudio(); clearProjectiles();
+  initAudio(); clearProjectiles(); endPvp();
   $('#menu').hidden = true; $('#end').hidden = true; $('#pause').hidden = true; $('#hud').hidden = false;
   $('#score').hidden = false; $('#lobbyBar').hidden = true; $('#padTip').hidden = true;
   S.paused = false; S.inShop = false; lastSlots = ''; player.inZone = false;
@@ -1648,7 +1807,13 @@ function updateLobby(dt) {
     if (on) onPad = k;
   }
   const tip = $('#padTip');
-  if (!onPad) { lobby.padArmed = true; lobby.padT = 0; tip.hidden = true; }
+  lobby.queued = onPad === 'pvp'; if (!lobby.queued) lobby.challenge = null;
+  if (onPad === 'pvp') {
+    tip.hidden = false; lobby.padT = 0;
+    const waiting = queuedPeers().length - 1;
+    tip.textContent = waiting > 0 ? (lobby.challenge ? 'Challenger found… get ready!' : 'Waiting for a free opponent…') : 'Waiting for another player to step on the Player Duel pad…';
+    if (findDuel()) return;
+  } else if (!onPad) { lobby.padArmed = true; lobby.padT = 0; tip.hidden = true; }
   else if (lobby.padArmed) {
     lobby.padT += dt;
     const need = onPad === 'shop' ? 0.6 : 1.5;
@@ -1670,23 +1835,7 @@ function updateLobby(dt) {
   // remote players: smooth toward their latest state
   const k = 1 - Math.exp(-14 * dt);
   for (const r of lobby.remotes.values()) {
-    r.prev.copy(r.pos);
-    if (r.pos.distanceTo(r.tgt) > 6) r.pos.copy(r.tgt); else r.pos.lerp(r.tgt, k);
-    r.yaw = wrap(r.yaw + wrap(r.tyaw - r.yaw) * k);
-    const spd = Math.hypot(r.pos.x - r.prev.x, r.pos.z - r.prev.z) / Math.max(dt, 1e-3);
-    r.walk += spd * dt * 1.7;
-    const u = r.mesh.userData, sw = Math.sin(r.walk) * 0.7 * Math.min(1, spd / 4);
-    r.mesh.position.copy(r.pos);
-    if (r.em >= 0 && r.alive) {
-      r.emT = (r.emT || 0) + dt;
-      const o = poseEmote(r.mesh, r.em, r.emT);
-      r.mesh.position.y += o.y; r.mesh.rotation.set(0, r.yaw + o.ry, o.rz); r.mesh.scale.y = 1;
-    } else {
-      u.gun.visible = true;
-      u.legL.rotation.set(sw, 0, 0); u.legR.rotation.set(-sw, 0, 0); u.armL.rotation.set(-sw * 0.8, 0, 0);
-      u.armR.rotation.set(Math.PI / 2 + r.pitch, 0, 0); u.head.rotation.set(r.pitch * 0.5, 0, 0);
-      r.mesh.rotation.set(0, r.yaw, 0); r.mesh.scale.y = 1 - 0.35 * r.ck;
-    }
+    animRemote(r, dt, k);
     r.mesh.visible = r.alive;
     const hostile = r.inZone && p.inZone;
     for (const o of r.outlines) o.visible = hostile;
@@ -1703,9 +1852,9 @@ function updateLobby(dt) {
   // network: send my state ~12x a second, flush batched hits ~8x a second
   lobby.sendT -= dt; lobby.flushT -= dt;
   if (lobby.room && lobby.sendT <= 0) {
-    lobby.sendT = 0.08;
+    lobby.sendT = lobby.queued ? 0.25 : 0.08;
     lobby.room.presence({ md: 'lobby', nm: myName || 'Player', x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
-      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1 }).catch(() => {});
+      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1, q: lobby.queued ? 1 : 0, ch: lobby.queued ? lobby.challenge || null : null, mp: mapPick }).catch(() => {});
   }
   if (lobby.flushT <= 0) { lobby.flushT = 0.12; if (lobby.pending.size) flushHits(); }
   // HUD
@@ -2418,7 +2567,7 @@ function resetFighter(f, x, z, yaw) {
 function startMatch() {
   S.you = 0; S.bot = 0; S.round = 1; S.earned = 0; Object.keys(stats).forEach(k => stats[k] = 0);
   loadout(player, equip);
-  loadout(bot, { primary: PRIMARIES[Math.floor(Math.random() * 3)], secondary: 'pistol', melee: 'knife', utility: 'grenade' });
+  if (!S.pvp) loadout(bot, { primary: PRIMARIES[Math.floor(Math.random() * 3)], secondary: 'pistol', melee: 'knife', utility: 'grenade' });
   $('#feed').innerHTML = '';
   addFeed(`Map: <span class="you">${MAPS[curMap].name}</span>`);
   startRound();
@@ -2433,6 +2582,16 @@ function clearProjectiles() {
 }
 function startRound() {
   clearProjectiles();
+  if (S.pvp) {
+    const me = S.pvp.side === 0 ? [0, 20, 0] : [0, -20, Math.PI], op = oppSpawn();
+    resetFighter(player, me[0], me[1], me[2]); player.inZone = true;
+    if (duelOpp) { duelOpp.alive = true; duelOpp.hp = 100; duelOpp.pos.set(op[0], 0, op[1]); duelOpp.tgt.copy(duelOpp.pos); duelOpp.yaw = duelOpp.tyaw = op[2]; duelOpp.mesh.visible = true; }
+    buildVM(player.loadout[0]);
+    S.mode = 'countdown'; S.t = 3; S.lastTick = 4;
+    setBanner('ROUND ' + S.round, '3', '');
+    updateScore(); lastSlots = ''; updateHud();
+    return;
+  }
   resetFighter(player, 0, 20, 0); resetFighter(bot, 0, -20, Math.PI);
   bot.ai = { ...DIFF[diff], seenT: 0, lostT: 0, last: new V3(0, 0, 20), errY: 0, errP: 0, errT: 0, strafe: 1, strafeT: 0, stuckT: 0, detourT: 0, detour: 1, burst: 0, burstLen: 6, pause: 0, settle: 0, aimHead: false, nadeCd: 8, wander: null };
   bot.mesh.visible = true; bot.mesh.rotation.set(0, Math.PI, 0); bot.mesh.position.set(0, 0, -20);
@@ -2447,9 +2606,9 @@ function endRound(winner, head) {
   updateScore();
   const over = S.you >= WIN || S.bot >= WIN;
   setBanner(winner === player ? 'ROUND WON' : 'ROUND LOST', head ? 'HEADSHOT!' : `${S.you} – ${S.bot}`, winner === player ? 'win' : 'lose');
-  const me = displayName();
-  addFeed(winner === player ? `<span class="you">${me}</span> eliminated <span class="bot">Bot</span>${head ? ' <span class="hs">· headshot</span>' : ''}` : `<span class="bot">Bot</span> eliminated <span class="you">${me}</span>${head ? ' <span class="hs">· headshot</span>' : ''}`);
-  if (winner === player) { const e = $('#elim'); $('#elimSub').textContent = head ? 'BOT · HEADSHOT' : 'BOT'; e.classList.remove('show'); void e.offsetWidth; e.classList.add('show'); }
+  const me = displayName(), them = S.pvp ? S.pvp.name : 'Bot';
+  addFeed(winner === player ? `<span class="you">${me}</span> eliminated <span class="bot">${them}</span>${head ? ' <span class="hs">· headshot</span>' : ''}` : `<span class="bot">${them}</span> eliminated <span class="you">${me}</span>${head ? ' <span class="hs">· headshot</span>' : ''}`);
+  if (winner === player) { const e = $('#elim'); $('#elimSub').textContent = (S.pvp ? S.pvp.name.toUpperCase() : 'BOT') + (head ? ' · HEADSHOT' : ''); e.classList.remove('show'); void e.offsetWidth; e.classList.add('show'); }
   S.mode = 'roundEnd'; S.t = 2.8; S.over = over;
   if (over && winner === player) { S.slow = 1.4; S.t = 1.6; }
 }
@@ -2606,7 +2765,9 @@ function finishMatch(afterParty) {
   $('#endTitle').textContent = won ? 'VICTORY!' : 'DEFEAT';
   $('#endTitle').className = won ? 'win' : 'lose';
   $('#endEyebrow').textContent = `FINAL ${S.you}–${S.bot}`;
-  $('#endLede').textContent = won ? `You beat the ${DIFF[diff].label} bot with the ${W[equip.primary].name}.` : `The ${DIFF[diff].label} bot took it with the ${W[bot.loadout[0]].name}. Run it back.`;
+  const pvpName = S.pvp ? S.pvp.name : null; S.lastPvp = !!S.pvp;
+  if (pvpName) $('#endLede').textContent = won ? `You beat ${pvpName} in a player duel.` : `${pvpName} took the duel. Step back on the pad for another go.`;
+  else $('#endLede').textContent = won ? `You beat the ${DIFF[diff].label} bot with the ${W[equip.primary].name}.` : `The ${DIFF[diff].label} bot took it with the ${W[bot.loadout[0]].name}. Run it back.`;
   S.earned += won ? 40 : 15;
   wallet += S.earned; save(); renderWallet();
   $('#endEarn').innerHTML = ownerMode ? `${KEY_SVG}<b>∞</b> keys · owner` : `${KEY_SVG}<b>+${S.earned}</b> keys earned · ${wallet} total`;
@@ -2616,6 +2777,8 @@ function finishMatch(afterParty) {
   $('#stHs').textContent = stats.heads;
   $('#stKd').textContent = `${stats.kills}–${stats.deaths}`;
   $('#hud').hidden = true; $('#end').hidden = false;
+  endPvp();
+  $('#againBtn').textContent = S.lastPvp ? 'FIND ANOTHER DUEL' : 'REMATCH';
   setNetMode('menu');
   menuPose();
   unlock();
@@ -2720,7 +2883,7 @@ function tryFire(f) {
       if (tw < w.range) burst(end, [0xffffff, 0xc9d3e6], 3, 2.5, 0.07, 0.3);
     }
   }
-  if (S.mode === 'lobby' && f === player && lastEnd) netShot(muzzle, lastEnd, key);
+  if ((S.mode === 'lobby' || S.pvp) && f === player && lastEnd) netShot(muzzle, lastEnd, key);
   flash(muzzle, f.isBot ? 0.28 : 0.18);
   sfx(key, f.isBot ? distVol(f.pos) : 1);
   if (!f.isBot) {
@@ -2773,7 +2936,7 @@ function damage(t, amt, src, head, at, quiet, kb) {
     if (t === bot) bot.mesh.visible = false;
     S.shake = Math.max(S.shake, 0.25);
     if (S.mode === 'lobby') lobbyDeath(src, head);
-    else endRound(src === t ? (t === player ? bot : player) : src, head);
+    else { if (S.pvp && t === player) pvpDeath(src, head); endRound(src === t ? (t === player ? (S.pvp ? duelOpp : bot) : player) : src, head); }
   }
 }
 
@@ -2813,9 +2976,9 @@ function explode(pos, owner, opt = {}) {
   ring(pos, radius * 0.92); burst(pos, [0xffb02e, 0xffe066, 0xff6a2a], 18, 9, 0.16, 0.6); burst(pos, 0x6b7385, 10, 4, 0.22, 0.9);
   sfx('boom', distVol(pos));
   S.shake = Math.max(S.shake, clamp(1 - pos.distanceTo(player.pos) / 18, 0, 1) * 0.6);
-  if (S.mode === 'lobby' && owner === player) netEmit('boom', { p: v3a(pos), r: radius });
+  if ((S.mode === 'lobby' || S.pvp) && owner === player) netEmit('boom', { p: v3a(pos), r: radius });
   if (S.mode !== 'live' && S.mode !== 'lobby') return;
-  const victims = S.mode === 'lobby' ? (owner === player ? [player, ...lobbyTargets()] : []) : [player, bot];
+  const victims = S.pvp ? (owner === player ? [player, ...(duelOpp && duelOpp.alive ? [duelOpp] : [])] : []) : S.mode === 'lobby' ? (owner === player ? [player, ...lobbyTargets()] : []) : [player, bot];
   for (const f of victims) {
     if (!f.alive) continue;
     const c = f.pos.clone(); c.y += 1;
@@ -2882,7 +3045,7 @@ function fireProjectile(f, w, dir) {
   }
   mesh.position.copy(start); scene.add(mesh);
   projs.push({ kind: w.proj, p: start.clone(), v: d.multiplyScalar(speed), grav, owner: f, mesh, t: 4, trail: 0, w });
-  if (S.mode === 'lobby' && f === player) netEmit('proj', { k: w.proj, p: v3a(start), v: v3a(d) });
+  if ((S.mode === 'lobby' || S.pvp) && f === player) netEmit('proj', { k: w.proj, p: v3a(start), v: v3a(d) });
   flash(start, 0.3);
 }
 function updateProjectiles(dt) {
@@ -2941,7 +3104,7 @@ function fireFlame(f, w, o, base) {
   }
   const now = performance.now();
   if (!f.flameSnd || now - f.flameSnd > 160) { f.flameSnd = now; sfx('flame', f.isBot ? distVol(f.pos) : 1); }
-  if (S.mode === 'lobby' && f === player) netFlame(muzzle, base);
+  if ((S.mode === 'lobby' || S.pvp) && f === player) netFlame(muzzle, base);
   for (const tgt of enemiesOf(f)) {
     if (!tgt.alive) continue;
     const c = tgt.pos.clone(); c.y += 1 - 0.35 * (tgt.ck || 0);
@@ -3248,7 +3411,7 @@ function updateHud(dt = 0) {
   S.dirT = Math.max(0, (S.dirT || 0) - dt * 0.9);
   const dd = $('#dmgdir div'); dd.style.opacity = S.dirT; dd.style.transform = `rotate(${S.dirAng || 0}rad)`;
   const bb = $('#botbar');
-  const bt = S.mode === 'lobby' ? lobby.barTarget : bot;
+  const bt = S.mode === 'lobby' ? lobby.barTarget : S.pvp ? duelOpp : bot;
   const bp = bt && bt.alive && los(camera.position, eyeOf(bt)) ? project(bt.pos.clone().setY(bt.pos.y + 2.3)) : null;
   if (bp && S.mode !== 'menu') { bb.style.display = 'block'; bb.style.left = bp.x + 'px'; bb.style.top = bp.y + 'px'; bb.querySelector('.fill').style.width = (bt.hp / (bt.max || 100) * 100) + '%'; bb.querySelector('.lbl').textContent = bt.isDummy ? 'DUMMY' : bt.remote ? bt.name : 'BOT'; } else bb.style.display = 'none';
   for (let i = nums.length - 1; i >= 0; i--) {
@@ -3354,9 +3517,9 @@ function frame(now) {
       if (S.t <= 0) { if (S.over) finishMatch(); else { S.round++; startRound(); } }
     }
     if (S.bannerFade !== undefined && (S.mode === 'live' || S.mode === 'lobby')) { S.bannerFade -= dt; banner.style.opacity = clamp(S.bannerFade * 2, 0, 1); }
-    tickTimers(player, dt); if (S.mode !== 'lobby') tickTimers(bot, dt);
+    tickTimers(player, dt); if (S.mode !== 'lobby' && !S.pvp) tickTimers(bot, dt);
     updatePlayer(dt);
-    if (S.mode === 'lobby') updateLobby(dt); else if (!adm.freezeBot) updateBot(dt);
+    if (S.mode === 'lobby') updateLobby(dt); else if (S.pvp) updateDuel(dt); else if (!adm.freezeBot) updateBot(dt);
     updateGrenades(dt); updateProjectiles(dt); updateSatchels(dt);
   } else if (S.mode === 'menu') {
     bot.walk += dt * 2; const u = bot.mesh.userData; u.armL.rotation.x = Math.sin(bot.walk) * 0.15; u.head.rotation.y = Math.sin(bot.walk * 0.4) * 0.3;
@@ -3795,6 +3958,7 @@ const TELEPORTS = [
   ['Spawn', () => SPAWN.clone()],
   ['Duel Zone', () => new V3(LX, 0, LZ - 10)],
   ['Bot Duel pad', () => new V3(PADS.bot.x - 3, 0, PADS.bot.z)],
+  ['Player Duel pad', () => new V3(PADS.pvp.x - 3, 0, PADS.pvp.z)],
   ['Shop pad', () => new V3(PADS.shop.x + 3, 0, PADS.shop.z)],
   ['Fountain top', () => new V3(LX, 3.4, LZ + 6.9)],
   ['Above the lobby', () => new V3(LX, 18, LZ)]
@@ -3912,10 +4076,10 @@ function menuPose() {
 }
 function go() { enterLobby(); }
 $('#playBtn').addEventListener('click', () => { if (!myName) openNamer(true); else go(); });
-$('#againBtn').addEventListener('click', startBotMatch);
+$('#againBtn').addEventListener('click', () => { if (S.lastPvp) { enterLobby(); const t = PADS.pvp; player.pos.set(t.x, 0, t.z); } else startBotMatch(); });
 $('#menuBtn').addEventListener('click', enterLobby);
 $('#resumeBtn').addEventListener('click', resume);
-$('#quitBtn').addEventListener('click', () => { S.paused = false; S.mode = 'menu'; S.inShop = false; player.inZone = false; clearProjectiles(); setNetMode('menu'); $('#padTip').hidden = true; $('#pause').hidden = true; $('#hud').hidden = true; $('#menu').hidden = false; menuPose(); });
+$('#quitBtn').addEventListener('click', () => { endPvp(); S.paused = false; S.mode = 'menu'; S.inShop = false; player.inZone = false; clearProjectiles(); setNetMode('menu'); $('#padTip').hidden = true; $('#pause').hidden = true; $('#hud').hidden = true; $('#menu').hidden = false; menuPose(); });
 
 bot.loadout = ['rifle', 'pistol', 'knife', 'grenade'];
 menuPose();
