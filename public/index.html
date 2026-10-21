@@ -350,6 +350,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 .scard.pass .tag { background: linear-gradient(90deg, #ffd23f, #ff9a3c); }
 .pbadge { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
   background: linear-gradient(160deg, #ffe066, #ffb02e); color: var(--ink); font: 30px var(--display); }
+.pbadge.svgb { background: #000; padding: 0; overflow: hidden; } .pbadge.svgb svg { width: 100%; height: 100%; display: block; }
 .passnote { grid-column: 1 / -1; margin: 0; color: rgba(255,255,255,.8); font: 14px system-ui, sans-serif; }
 .scard svg.wi { width: 84px; height: 42px; color: #fff; filter: drop-shadow(0 3px 0 var(--ink)); }
 .scard .cn { font: 22px var(--display); text-shadow: var(--ol-s); }
@@ -871,13 +872,20 @@ const SKINS = {
 };
 const skinsOwned = new Set();
 // Game passes: permanent perks bought with keys (owner gets them free)
+// safe icon for the Skin Vault: white safe with a dial on a black disc
+const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#000"/>'
+  + '<rect x="11" y="19" width="42" height="24" rx="4" fill="#fff"/><rect x="14.5" y="22" width="35" height="18" rx="2.5" fill="none" stroke="#000" stroke-width="1.2"/>'
+  + '<rect x="13.5" y="25" width="2.6" height="4" rx=".6" fill="#000"/><rect x="13.5" y="33" width="2.6" height="4" rx=".6" fill="#000"/>'
+  + '<circle cx="42" cy="31" r="5" fill="#000"/><circle cx="42" cy="31" r="2.3" fill="#fff"/>'
+  + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<line x1="${(42 + Math.cos(a) * 2.9).toFixed(2)}" y1="${(31 + Math.sin(a) * 2.9).toFixed(2)}" x2="${(42 + Math.cos(a) * 4.3).toFixed(2)}" y2="${(31 + Math.sin(a) * 4.3).toFixed(2)}" stroke="#fff" stroke-width=".8" stroke-linecap="round"/>`; }).join('')
+  + '<rect x="16" y="43" width="7" height="4" rx="1" fill="#fff"/><rect x="41" y="43" width="7" height="4" rx="1" fill="#fff"/></svg>';
 const PASSES = {
   vip:    { name: 'VIP', price: 7500, mark: '★', desc: 'Gold ★ name tag everyone in the lobby can see, plus 25% more keys' },
   keys2x: { name: '2× Keys', price: 5000, mark: '2×', desc: 'Double keys from every match and knockout' },
   dash3:  { name: 'Triple Dash', price: 4000, mark: '»', desc: 'Three dash charges instead of two' },
   djump:  { name: 'Double Jump', price: 6000, mark: '⇈', desc: 'Press Space again in mid-air to jump once more' },
   swift:  { name: 'Swift', price: 4500, mark: '➤', desc: 'Move 10% faster with every weapon' },
-  vault:  { name: 'Skin Vault', price: 15000, mark: '◆', desc: 'Every shop skin, unlocked on every weapon' },
+  vault:  { name: 'Skin Vault', price: 15000, svg: VAULT_SVG, desc: 'Every shop skin, unlocked on every weapon' },
   aura:   { name: 'Aura Farm', price: 12000, img: 3, desc: 'Your win animation turns black and white and the aura faces take over' }
 };
 const passes = new Set();
@@ -3852,7 +3860,7 @@ function renderPasses() {
     else btn = `<button type="button" disabled>${KEY_SVG}${ps.price.toLocaleString()} · need ${(ps.price - wallet).toLocaleString()} more</button>`;
     return `<div class="scard pass ${has ? 'eq' : ''}">
       <span class="tag">${has ? 'ACTIVE' : 'PASS'}</span>
-      <div class="pbadge" aria-hidden="true"${ps.img !== undefined ? ` style="background:#000 url(${AURA_URIS[ps.img]}) center/cover"` : ''}>${ps.img !== undefined ? '' : ps.mark}</div>
+      <div class="pbadge${ps.svg ? ' svgb' : ''}" aria-hidden="true"${ps.img !== undefined ? ` style="background:#000 url(${AURA_URIS[ps.img]}) center/cover"` : ''}>${ps.svg || (ps.img !== undefined ? '' : ps.mark)}</div>
       <span class="cn">${ps.name}</span><span class="cr">${ps.desc}</span>
       ${btn}
     </div>`;
