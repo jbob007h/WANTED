@@ -350,7 +350,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 .scard.pass .tag { background: linear-gradient(90deg, #ffd23f, #ff9a3c); }
 .pbadge { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
   background: linear-gradient(160deg, #ffe066, #ffb02e); color: var(--ink); font: 30px var(--display); }
-.pbadge.svgb { background: #000; padding: 0; overflow: hidden; } .pbadge.svgb svg { width: 100%; height: 100%; display: block; }
+.pbadge.svgb { background: #000; padding: 0; overflow: hidden; } .pbadge.svgb svg, .pbadge.svgg svg { width: 100%; height: 100%; display: block; }
 .passnote { grid-column: 1 / -1; margin: 0; color: rgba(255,255,255,.8); font: 14px system-ui, sans-serif; }
 .scard svg.wi { width: 84px; height: 42px; color: #fff; filter: drop-shadow(0 3px 0 var(--ink)); }
 .scard .cn { font: 22px var(--display); text-shadow: var(--ol-s); }
@@ -872,6 +872,13 @@ const SKINS = {
 };
 const skinsOwned = new Set();
 // Game passes: permanent perks bought with keys (owner gets them free)
+// sprinter with speed lines for Triple Dash (black on the gold badge)
+const DASH_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="#0b1630" stroke-linecap="round" stroke-linejoin="round">'
+  + '<path d="M9 22h11M5 30h14M8 38h9" stroke-width="3.2"/>'
+  + '<circle cx="45" cy="15" r="5.2" fill="#0b1630" stroke="none"/>'
+  + '<path d="M40 23 31 37" stroke-width="7"/>'
+  + '<path d="M38 22 29 20 22 26" stroke-width="4.6"/><path d="M41 24 46 31 53 27" stroke-width="4.6"/>'
+  + '<path d="M31 37 39 43 35 54" stroke-width="5.4"/><path d="M31 37 25 46 16 50" stroke-width="5.4"/></svg>';
 // safe icon for the Skin Vault: white safe with a dial on a black disc
 const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#000"/>'
   + '<rect x="11" y="19" width="42" height="24" rx="4" fill="#fff"/><rect x="14.5" y="22" width="35" height="18" rx="2.5" fill="none" stroke="#000" stroke-width="1.2"/>'
@@ -882,7 +889,7 @@ const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" c
 const PASSES = {
   vip:    { name: 'VIP', price: 7500, mark: '★', desc: 'Gold ★ name tag everyone in the lobby can see, plus 25% more keys' },
   keys2x: { name: '2× Keys', price: 5000, mark: '2×', desc: 'Double keys from every match and knockout' },
-  dash3:  { name: 'Triple Dash', price: 4000, mark: '»', desc: 'Three dash charges instead of two' },
+  dash3:  { name: 'Triple Dash', price: 4000, svg: DASH_SVG, gold: true, desc: 'Three dash charges instead of two' },
   djump:  { name: 'Double Jump', price: 6000, mark: '⇈', desc: 'Press Space again in mid-air to jump once more' },
   swift:  { name: 'Swift', price: 4500, mark: '➤', desc: 'Move 10% faster with every weapon' },
   vault:  { name: 'Skin Vault', price: 15000, svg: VAULT_SVG, desc: 'Every shop skin, unlocked on every weapon' },
@@ -3860,7 +3867,7 @@ function renderPasses() {
     else btn = `<button type="button" disabled>${KEY_SVG}${ps.price.toLocaleString()} · need ${(ps.price - wallet).toLocaleString()} more</button>`;
     return `<div class="scard pass ${has ? 'eq' : ''}">
       <span class="tag">${has ? 'ACTIVE' : 'PASS'}</span>
-      <div class="pbadge${ps.svg ? ' svgb' : ''}" aria-hidden="true"${ps.img !== undefined ? ` style="background:#000 url(${AURA_URIS[ps.img]}) center/cover"` : ''}>${ps.svg || (ps.img !== undefined ? '' : ps.mark)}</div>
+      <div class="pbadge${ps.svg ? (ps.gold ? ' svgg' : ' svgb') : ''}" aria-hidden="true"${ps.img !== undefined ? ` style="background:#000 url(${AURA_URIS[ps.img]}) center/cover"` : ''}>${ps.svg || (ps.img !== undefined ? '' : ps.mark)}</div>
       <span class="cn">${ps.name}</span><span class="cr">${ps.desc}</span>
       ${btn}
     </div>`;
