@@ -872,6 +872,14 @@ const SKINS = {
 };
 const skinsOwned = new Set();
 // Game passes: permanent perks bought with keys (owner gets them free)
+// white old-fashioned key on black for 2× Keys, with a small gold 2× tag
+const KEY2_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="#000"/>'
+  + '<g transform="rotate(-40 32 32)" stroke="#000" stroke-width="1.6" stroke-linejoin="round">'
+  + '<path d="M10 29h28v6H10z M14 35h4v6h-4z M20 35h4v4h-4z" fill="#fff" stroke="none"/>'
+  + '<path d="M10 29h27.5M10 35h27.5M10 29v6M14 35v6h4v-6M20 35v4h4v-4" fill="none" stroke="#000" stroke-width="1.4"/>'
+  + '<ellipse cx="45" cy="32" rx="10" ry="11" fill="#fff"/><ellipse cx="46" cy="32" rx="5" ry="6" fill="#fff" stroke-width="1.8"/></g>'
+  + '<rect x="38" y="46" width="22" height="14" rx="4" fill="#ffd23f" stroke="#0b1630" stroke-width="2"/>'
+  + '<text x="49" y="57" text-anchor="middle" font-family="Lilita One, Impact, sans-serif" font-size="11" fill="#0b1630">2×</text></svg>';
 // safe icon for the Skin Vault: white safe with a dial on a black disc
 const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#000"/>'
   + '<rect x="11" y="19" width="42" height="24" rx="4" fill="#fff"/><rect x="14.5" y="22" width="35" height="18" rx="2.5" fill="none" stroke="#000" stroke-width="1.2"/>'
@@ -880,7 +888,7 @@ const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" c
   + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<line x1="${(42 + Math.cos(a) * 2.9).toFixed(2)}" y1="${(31 + Math.sin(a) * 2.9).toFixed(2)}" x2="${(42 + Math.cos(a) * 4.3).toFixed(2)}" y2="${(31 + Math.sin(a) * 4.3).toFixed(2)}" stroke="#fff" stroke-width=".8" stroke-linecap="round"/>`; }).join('')
   + '<rect x="16" y="43" width="7" height="4" rx="1" fill="#fff"/><rect x="41" y="43" width="7" height="4" rx="1" fill="#fff"/></svg>';
 const PASSES = {
-  keys2x: { name: '2× Keys', price: 5000, mark: '2×', desc: 'Double keys from every match and knockout' },
+  keys2x: { name: '2× Keys', price: 5000, svg: KEY2_SVG, desc: 'Double keys from every match and knockout' },
   vault:  { name: 'Skin Vault', price: 15000, svg: VAULT_SVG, desc: 'Every shop skin, unlocked on every weapon' },
   aura:   { name: 'Aura Farm', price: 12000, img: 3, desc: 'Your win animation turns black and white and the aura faces take over' }
 };
