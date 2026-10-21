@@ -346,6 +346,11 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 .shopgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
 .scard { border: 3px solid var(--ink); background: rgba(255,255,255,.08); border-radius: 14px; padding: 12px; display: grid; gap: 6px; align-content: start; box-shadow: 0 4px 0 var(--ink); min-width: 0; position: relative; }
 .scard.eq { background: linear-gradient(180deg, var(--blue), var(--blue-d)); }
+.scard.pass { background: linear-gradient(160deg, rgba(255,210,63,.16), rgba(155,107,255,.14)); }
+.scard.pass .tag { background: linear-gradient(90deg, #ffd23f, #ff9a3c); }
+.pbadge { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; border: 3px solid var(--ink); box-shadow: 0 4px 0 var(--ink);
+  background: linear-gradient(160deg, #ffe066, #ffb02e); color: var(--ink); font: 30px var(--display); }
+.passnote { grid-column: 1 / -1; margin: 0; color: rgba(255,255,255,.8); font: 14px system-ui, sans-serif; }
 .scard svg.wi { width: 84px; height: 42px; color: #fff; filter: drop-shadow(0 3px 0 var(--ink)); }
 .scard .cn { font: 22px var(--display); text-shadow: var(--ol-s); }
 .scard .cr { font-size: 13px; color: #dbe6ff; font-weight: 500; }
@@ -497,7 +502,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
   <div id="botbar"><div class="lbl">BOT</div><div class="trk"><div class="fill"></div></div></div>
   <div id="nums"></div>
   <div id="bottom">
-    <div id="hp"><span class="val" id="hpVal">100</span><div class="trk"><div class="ghost" id="hpGhost"></div><div class="fill" id="hpFill"></div><div class="ticks"></div></div><span class="tag">HP</span><div id="dash" title="Dash charges"><i><b></b></i><i><b></b></i></div><div id="fuel" title="Jetpack fuel" hidden><b></b></div></div>
+    <div id="hp"><span class="val" id="hpVal">100</span><div class="trk"><div class="ghost" id="hpGhost"></div><div class="fill" id="hpFill"></div><div class="ticks"></div></div><span class="tag">HP</span><div id="dash" title="Dash charges"><i><b></b></i><i><b></b></i><i hidden><b></b></i></div><div id="fuel" title="Jetpack fuel" hidden><b></b></div></div>
     <div id="bar2"><div id="slots"></div><div id="ammo"><span class="cur" id="ammoCur">30</span><span class="max" id="ammoMax">/ 30</span></div></div>
   </div>
   <div id="banner"><div class="big"></div><div class="sub"></div></div>
@@ -581,6 +586,7 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
       <button type="button" data-s="melee">Melee</button>
       <button type="button" data-s="utility">Utility</button>
       <button type="button" data-s="skins">Skins</button>
+      <button type="button" data-s="passes">Game Passes</button>
     </div>
     <div class="shopgrid" id="shopGrid"></div>
     <p class="shopnote">Earn keys by playing: 15 per round you win, +5 for a headshot finish, 40 for winning the match and 15 for finishing one.</p>
@@ -851,6 +857,19 @@ const SKINS = {
   magnite: { name: 'Magnite', price: 0, owner: true, ownerOnly: true, css: `url(${MAGNITE_URI}) center/cover, #3a0008` }
 };
 const skinsOwned = new Set();
+// Game passes: permanent perks bought with keys (owner gets them free)
+const PASSES = {
+  vip:    { name: 'VIP', price: 7500, mark: '★', desc: 'Gold ★ name tag everyone in the lobby can see, plus 25% more keys' },
+  keys2x: { name: '2× Keys', price: 5000, mark: '2×', desc: 'Double keys from every match and knockout' },
+  dash3:  { name: 'Triple Dash', price: 4000, mark: '»', desc: 'Three dash charges instead of two' },
+  djump:  { name: 'Double Jump', price: 6000, mark: '⇈', desc: 'Press Space again in mid-air to jump once more' },
+  swift:  { name: 'Swift', price: 4500, mark: '➤', desc: 'Move 10% faster with every weapon' },
+  vault:  { name: 'Skin Vault', price: 15000, mark: '◆', desc: 'Every shop skin, unlocked on every weapon' }
+};
+const passes = new Set();
+const hasPass = k => passes.has(k) || ownerMode;
+const maxDash = f => (f === player && hasPass('dash3') ? 3 : 2);
+const keyMult = () => (hasPass('keys2x') ? 2 : 1) * (hasPass('vip') ? 1.25 : 1);
 // Enargade is the owner's skin; knocking the owner out in the Duel Zone earns it
 let enargadeEarned = false;
 // owner skins: Enargade can also be earned by knocking out the owner; Magnite is owner-only
@@ -870,10 +889,11 @@ try {
   if (s.equip) SLOTS.forEach(sl => { const k = s.equip[sl]; if (W[k] && W[k].slot === sl && owned.has(k)) equip[sl] = k; });
   if (s.eg === 1) enargadeEarned = true;
   if (typeof s.map === 'string') mapPick = s.map;
+  if (Array.isArray(s.passes)) s.passes.forEach(k => { if (PASSES[k]) passes.add(k); });
   if (Array.isArray(s.skins)) s.skins.forEach(id => { const [k, sk] = String(id).split(':'); if (canSkin(k) && SKINS[sk]) skinsOwned.add(k + ':' + sk); });
-  if (s.skinEquip && typeof s.skinEquip === 'object') for (const k in s.skinEquip) { const sk = s.skinEquip[k]; if (canSkin(k) && SKINS[sk] && (sk === 'default' || skinsOwned.has(k + ':' + sk) || SKINS[sk].owner)) skinEquip[k] = sk; }
+  if (s.skinEquip && typeof s.skinEquip === 'object') for (const k in s.skinEquip) { const sk = s.skinEquip[k]; if (canSkin(k) && SKINS[sk] && (sk === 'default' || skinsOwned.has(k + ':' + sk) || passes.has('vault') || SKINS[sk].owner)) skinEquip[k] = sk; }
 } catch (e) {}
-const save = () => { try { localStorage.setItem('duelground', JSON.stringify({ diff, sens, keys: wallet, owned: [...owned], equip, skins: [...skinsOwned], skinEquip, eg: enargadeEarned ? 1 : 0, map: mapPick, cfg })); } catch (e) {} };
+const save = () => { try { localStorage.setItem('duelground', JSON.stringify({ diff, sens, keys: wallet, owned: [...owned], equip, skins: [...skinsOwned], passes: [...passes], skinEquip, eg: enargadeEarned ? 1 : 0, map: mapPick, cfg })); } catch (e) {} };
 
 /* ---------- Renderer & scene ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -1503,7 +1523,7 @@ function makeRemote(peer, name) {
 function setRemoteName(r, name) {
   r.name = name;
   if (r.label) r.mesh.remove(r.label);
-  r.label = makeLabel(name, name.toLowerCase() === OWNER_NAME ? '#ffd23f' : '#ffffff');
+  r.label = makeLabel(r.vip ? '★ ' + name : name, name.toLowerCase() === OWNER_NAME || r.vip ? '#ffd23f' : '#ffffff');
   r.label.position.y = 2.45; r.mesh.add(r.label);
 }
 function syncPeers() {
@@ -1519,7 +1539,7 @@ function syncPeers() {
     const nm = typeof pr.nm === 'string' && NAME_RE.test(pr.nm) ? pr.nm : 'Player';
     let r = lobby.remotes.get(p.peer);
     if (!r) { r = makeRemote(p.peer, nm); lobby.remotes.set(p.peer, r); r.pos.set(num(pr.x, LX), num(pr.y), num(pr.z, LZ)); }
-    else if (r.name !== nm) setRemoteName(r, nm);
+    else if (r.name !== nm || r.vip !== (pr.vp === 1)) { r.vip = pr.vp === 1; setRemoteName(r, nm); }
     r.tgt.set(num(pr.x, LX), num(pr.y), num(pr.z, LZ));
     r.tyaw = num(pr.yw); r.pitch = clamp(num(pr.pt), -1.6, 1.6); r.ck = clamp(num(pr.ck), 0, 1);
     r.hp = clamp(num(pr.hp, 100), 0, 100); r.alive = !pr.dd; r.inZone = !!pr.zn;
@@ -1579,7 +1599,7 @@ function onNetKo(msg) {
   if (mine && !msg.sameTab && S.mode === 'lobby') {
     const e = $('#elim'); $('#elimSub').textContent = vn + (d.h ? ' · HEADSHOT' : ''); e.classList.remove('show'); void e.offsetWidth; e.classList.add('show');
     sfx('kill'); showHit(!!d.h, true);
-    if (!ownerMode) { wallet += 10; save(); renderWallet(); }
+    if (!ownerMode) { wallet += Math.round(10 * keyMult()); save(); renderWallet(); }
   }
 }
 function onNetShot(msg) {
@@ -1854,7 +1874,7 @@ function updateLobby(dt) {
   if (lobby.room && lobby.sendT <= 0) {
     lobby.sendT = lobby.queued ? 0.25 : 0.08;
     lobby.room.presence({ md: 'lobby', nm: myName || 'Player', x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
-      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1, q: lobby.queued ? 1 : 0, ch: lobby.queued ? lobby.challenge || null : null, mp: mapPick }).catch(() => {});
+      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1, vp: passes.has('vip') ? 1 : 0, q: lobby.queued ? 1 : 0, ch: lobby.queued ? lobby.challenge || null : null, mp: mapPick }).catch(() => {});
   }
   if (lobby.flushT <= 0) { lobby.flushT = 0.12; if (lobby.pending.size) flushHits(); }
   // HUD
@@ -2561,7 +2581,7 @@ function loadout(f, eq) {
 }
 function resetFighter(f, x, z, yaw) {
   f.pos.set(x, 0, z); f.vel.set(0, 0, 0); f.yaw = yaw; f.pitch = 0; f.hp = 100; f.alive = true; f.deadT = 0;
-  Object.assign(f, { crouching: false, crouchHeld: false, ck: 0, slideT: 0, slideCd: 0, dashCharges: 2, dashTime: 0, launched: false });
+  Object.assign(f, { crouching: false, crouchHeld: false, ck: 0, slideT: 0, slideCd: 0, dashCharges: maxDash(f), dashTime: 0, launched: false, airJumps: 1 });
   loadout(f, f.eq);
 }
 function startMatch() {
@@ -2769,6 +2789,7 @@ function finishMatch(afterParty) {
   if (pvpName) $('#endLede').textContent = won ? `You beat ${pvpName} in a player duel.` : `${pvpName} took the duel. Step back on the pad for another go.`;
   else $('#endLede').textContent = won ? `You beat the ${DIFF[diff].label} bot with the ${W[equip.primary].name}.` : `The ${DIFF[diff].label} bot took it with the ${W[bot.loadout[0]].name}. Run it back.`;
   S.earned += won ? 40 : 15;
+  S.earned = Math.round(S.earned * keyMult());
   wallet += S.earned; save(); renderWallet();
   $('#endEarn').innerHTML = ownerMode ? `${KEY_SVG}<b>∞</b> keys · owner` : `${KEY_SVG}<b>+${S.earned}</b> keys earned · ${wallet} total`;
   clearProjectiles();
@@ -3301,7 +3322,7 @@ function updatePlayer(dt) {
     p.crouchHeld = crouchKey;
     if (p.slideT > 0 && (!crouchKey || hs < 3.5)) p.slideT = 0;
     setCrouch(p, crouchKey);
-    let sp = MOVE[key]; if (aiming && w.ads) sp *= w.scope ? 0.45 : 0.65;
+    let sp = MOVE[key] * (hasPass('swift') ? 1.1 : 1); if (aiming && w.ads) sp *= w.scope ? 0.45 : 0.65;
     p.sprinting = !!(keys.ShiftLeft || keys.ShiftRight) && keys.KeyW && !keys.KeyS && !(aiming && w.ads) && !p.crouching && p.reloadT <= 0;
     if (p.sprinting) sp *= SPRINT;
     sp *= adm.speed;
@@ -3318,6 +3339,12 @@ function updatePlayer(dt) {
       p.vel.x += wish.x * 3 * dt; p.vel.z += wish.z * 3 * dt;
     } else accelerate(p, wish.multiplyScalar(sp), dt);
     if (keys.Space && p.onGround) { p.vel.y = JUMP * (adm.jump ? 1.75 : 1); if (p.slideT > 0) { p.slideT = 0; } }
+    if (p.onGround) p.airJumps = 1;
+    else if (keys.Space && !p.spaceHeld && p.airJumps > 0 && hasPass('djump') && p.loadout[3] !== 'jetpack' && !adm.fly) {
+      p.airJumps--; p.vel.y = Math.max(p.vel.y, JUMP * 0.92 * (adm.jump ? 1.75 : 1));
+      burst(p.pos.clone().setY(p.pos.y + 0.1), [0xffffff, 0xdfe8ff, 0xffd23f], 10, 3.5, 0.1, 0.4); sfx('dash', 0.6);
+    }
+    p.spaceHeld = !!keys.Space;
     // jetpack (utility slot): hold Space once airborne, or hold fire while it's in hand
     p.jetting = false;
     if (p.loadout[3] === 'jetpack') {
@@ -3352,7 +3379,7 @@ function updatePlayer(dt) {
 function tickTimers(f, dt) {
   f.cd = Math.max(0, f.cd - dt); f.swapT = Math.max(0, f.swapT - dt);
   f.dashTime = Math.max(0, f.dashTime - dt); f.slideT = Math.max(0, f.slideT - dt); f.slideCd = Math.max(0, f.slideCd - dt);
-  if (f.dashCharges < 2) f.dashCharges = Math.min(2, f.dashCharges + dt / 1.5);
+  const md = maxDash(f); if (f.dashCharges < md) f.dashCharges = Math.min(md, f.dashCharges + dt / 1.5);
   f.ck += ((f.crouching ? 1 : 0) - f.ck) * Math.min(1, dt * 12);
   f.lungeCd = Math.max(0, (f.lungeCd || 0) - dt);
   if (f.healPool > 0 && f.alive) { const h = Math.min(f.healPool, 70 * dt); f.hp = Math.min(100, f.hp + h); f.healPool -= h; if (f.hp >= 100) f.healPool = 0; }
@@ -3395,6 +3422,7 @@ function updateHud(dt = 0) {
   const hf = $('#hpFill'); hf.style.width = p.hp + '%';
   hf.style.background = p.hp > 50 ? '' : p.hp > 25 ? 'linear-gradient(180deg,#ffe98a,#ffd23f 55%,#d9a90e)' : 'linear-gradient(180deg,#ff8a95,#ff3b4e 55%,#b51f33)';
   $('#hpGhost').style.width = p.hp + '%';
+  const dpips = $('#dash').querySelectorAll('i'); if (dpips[2]) dpips[2].hidden = maxDash(p) < 3;
   $('#dash').querySelectorAll('b').forEach((b, i) => { const f = clamp(p.dashCharges - i, 0, 1); b.style.width = f * 100 + '%'; b.className = f >= 1 ? 'full' : ''; });
   const am = $('#ammo');
   if (w.mag) { $('#ammoCur').textContent = p.ammo[key]; $('#ammoMax').textContent = (w.flame ? 'FUEL ' : '/ ') + (w.flame ? '' : w.mag); am.classList.toggle('low', p.ammo[key] <= Math.ceil(w.mag * 0.2)); }
@@ -3714,7 +3742,7 @@ function renderSkins() {
   const cur = skinEquip[skinWeapon] || 'default';
   const chips = `<div class="skinpick" role="group" aria-label="Weapon">${ws.map(k => `<button type="button" class="wchip ${k === skinWeapon ? 'on' : ''}" data-act="pick" data-k="${k}">${icon(k)}<span>${W[k].name}</span></button>`).join('')}</div>`;
   const cards = Object.entries(SKINS).map(([sk, s]) => {
-    const has = sk === 'default' || skinsOwned.has(skinWeapon + ':' + sk) || (s.owner && skinUnlocked(sk)), on = cur === sk;
+    const has = sk === 'default' || skinsOwned.has(skinWeapon + ':' + sk) || (passes.has('vault') && !s.owner) || (s.owner && skinUnlocked(sk)), on = cur === sk;
     let btn;
     if (s.owner && !skinUnlocked(sk)) btn = `<button type="button" disabled>${s.ownerOnly ? 'Owner only' : 'Knock out the owner to unlock'}</button>`;
     else if (on) btn = `<button type="button" class="on" disabled aria-disabled="true">Equipped</button>`;
@@ -3734,9 +3762,27 @@ function renderSkins() {
   renderWallet();
   mountPreview(); showPreview(skinWeapon, cur);
 }
+function renderPasses() {
+  $('#shopGrid').innerHTML = Object.entries(PASSES).map(([k, ps]) => {
+    const has = passes.has(k);
+    let btn;
+    if (has) btn = `<button type="button" class="on" disabled aria-disabled="true">Owned</button>`;
+    else if (ownerMode) btn = `<button type="button" class="buy" data-act="pass-buy" data-p="${k}">Get free</button>`;
+    else if (wallet >= ps.price) btn = `<button type="button" class="buy" data-act="pass-buy" data-p="${k}">Buy ${KEY_SVG}${ps.price.toLocaleString()}</button>`;
+    else btn = `<button type="button" disabled>${KEY_SVG}${ps.price.toLocaleString()} · need ${(ps.price - wallet).toLocaleString()} more</button>`;
+    return `<div class="scard pass ${has ? 'eq' : ''}">
+      <span class="tag">${has ? 'ACTIVE' : 'PASS'}</span>
+      <div class="pbadge" aria-hidden="true">${ps.mark}</div>
+      <span class="cn">${ps.name}</span><span class="cr">${ps.desc}</span>
+      ${btn}
+    </div>`;
+  }).join('') + (ownerMode ? '<p class="passnote">As the owner, every pass already works for you.</p>' : '');
+  renderWallet();
+}
 function renderShop() {
   $('#shopTabs').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.s === shopTab));
   if (shopTab === 'skins') { renderSkins(); return; }
+  if (shopTab === 'passes') { renderPasses(); return; }
   const items = Object.keys(W).filter(k => W[k].slot === shopTab).sort((a, b) => W[a].price - W[b].price);
   $('#shopGrid').innerHTML = items.map(k => {
     const w = W[k], has = owned.has(k), on = equip[shopTab] === k;
@@ -3764,10 +3810,18 @@ $('#shopGrid').addEventListener('click', e => {
   const b = e.target.closest('button[data-act]'); if (!b) return;
   const act = b.dataset.act;
   if (act === 'pick') { skinWeapon = b.dataset.k; renderSkins(); return; }
+  if (act === 'pass-buy') {
+    const k = b.dataset.p, ps = PASSES[k]; if (!ps || passes.has(k) || (!ownerMode && wallet < ps.price)) return;
+    if (!ownerMode) wallet -= ps.price;
+    passes.add(k); initAudio(); sfx('buy'); save(); renderPasses();
+    if (S.mode === 'lobby') lobby.sendT = 0;
+    return;
+  }
   if (act === 'skin-buy' || act === 'skin-equip') {
     const sk = b.dataset.s, s = SKINS[sk]; if (!s || !skinUnlocked(sk)) return;
     const id = skinWeapon + ':' + sk;
     if (act === 'skin-buy') {
+      if (passes.has('vault') && !s.owner) skinsOwned.add(id);
       if (skinsOwned.has(id) || (!ownerMode && wallet < s.price)) return;
       if (!ownerMode) wallet -= s.price;
       skinsOwned.add(id); initAudio(); sfx('buy');
