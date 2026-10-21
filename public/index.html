@@ -872,13 +872,6 @@ const SKINS = {
 };
 const skinsOwned = new Set();
 // Game passes: permanent perks bought with keys (owner gets them free)
-// sprinter with speed lines for Triple Dash (black on the gold badge)
-const DASH_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true" fill="none" stroke="#0b1630" stroke-linecap="round" stroke-linejoin="round">'
-  + '<path d="M9 22h11M5 30h14M8 38h9" stroke-width="3.2"/>'
-  + '<circle cx="45" cy="15" r="5.2" fill="#0b1630" stroke="none"/>'
-  + '<path d="M40 23 31 37" stroke-width="7"/>'
-  + '<path d="M38 22 29 20 22 26" stroke-width="4.6"/><path d="M41 24 46 31 53 27" stroke-width="4.6"/>'
-  + '<path d="M31 37 39 43 35 54" stroke-width="5.4"/><path d="M31 37 25 46 16 50" stroke-width="5.4"/></svg>';
 // safe icon for the Skin Vault: white safe with a dial on a black disc
 const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#000"/>'
   + '<rect x="11" y="19" width="42" height="24" rx="4" fill="#fff"/><rect x="14.5" y="22" width="35" height="18" rx="2.5" fill="none" stroke="#000" stroke-width="1.2"/>'
@@ -887,16 +880,12 @@ const VAULT_SVG = '<svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" c
   + Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<line x1="${(42 + Math.cos(a) * 2.9).toFixed(2)}" y1="${(31 + Math.sin(a) * 2.9).toFixed(2)}" x2="${(42 + Math.cos(a) * 4.3).toFixed(2)}" y2="${(31 + Math.sin(a) * 4.3).toFixed(2)}" stroke="#fff" stroke-width=".8" stroke-linecap="round"/>`; }).join('')
   + '<rect x="16" y="43" width="7" height="4" rx="1" fill="#fff"/><rect x="41" y="43" width="7" height="4" rx="1" fill="#fff"/></svg>';
 const PASSES = {
-  vip:    { name: 'VIP', price: 7500, mark: '★', desc: 'Gold ★ name tag everyone in the lobby can see, plus 25% more keys' },
   keys2x: { name: '2× Keys', price: 5000, mark: '2×', desc: 'Double keys from every match and knockout' },
-  dash3:  { name: 'Triple Dash', price: 4000, svg: DASH_SVG, gold: true, desc: 'Three dash charges instead of two' },
-  djump:  { name: 'Double Jump', price: 6000, mark: '⇈', desc: 'Press Space again in mid-air to jump once more' },
-  swift:  { name: 'Swift', price: 4500, mark: '➤', desc: 'Move 10% faster with every weapon' },
   vault:  { name: 'Skin Vault', price: 15000, svg: VAULT_SVG, desc: 'Every shop skin, unlocked on every weapon' },
   aura:   { name: 'Aura Farm', price: 12000, img: 3, desc: 'Your win animation turns black and white and the aura faces take over' }
 };
 const passes = new Set();
-const hasPass = k => passes.has(k) || ownerMode;
+const hasPass = k => !!PASSES[k] && (passes.has(k) || ownerMode); // perks of removed passes stay off
 const maxDash = f => (f === player && hasPass('dash3') ? 3 : 2);
 const keyMult = () => (hasPass('keys2x') ? 2 : 1) * (hasPass('vip') ? 1.25 : 1);
 // Enargade is the owner's skin; knocking the owner out in the Duel Zone earns it
