@@ -395,6 +395,31 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 #victory.aura .aface.pop { animation: aPop .45s cubic-bezier(.2,1.6,.4,1) both, aJit .14s steps(2) .45s infinite; }
 @keyframes aPop { 0% { transform: translate(-50%, -50%) scale(2.2) rotate(-6deg); opacity: 0; filter: brightness(3); } 60% { opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1) rotate(0); filter: none; } }
 @keyframes aJit { 0% { transform: translate(-50%, -50%) translate(2px, -1px); } 100% { transform: translate(-50%, -50%) translate(-2px, 2px); } }
+#victory .aface.ghost { mix-blend-mode: screen; opacity: .7; }
+#victory .aface.gr { filter: sepia(1) saturate(9) hue-rotate(-40deg); animation: gJitR .09s steps(2) infinite; }
+#victory .aface.gc { filter: sepia(1) saturate(9) hue-rotate(150deg); animation: gJitC .11s steps(2) infinite; }
+@keyframes gJitR { 0% { transform: translate(-50%, -50%) translate(-9px, 2px); } 100% { transform: translate(-50%, -50%) translate(-4px, -3px) scale(1.02); } }
+@keyframes gJitC { 0% { transform: translate(-50%, -50%) translate(8px, -2px); } 100% { transform: translate(-50%, -50%) translate(4px, 3px) scale(1.03); } }
+#victory.aura .aface.beat:not(.ghost) { animation: aBeat .3s ease-out, aJit .14s steps(2) infinite; }
+@keyframes aBeat { 0% { transform: translate(-50%, -50%) scale(1.14); filter: brightness(1.8); } 100% { transform: translate(-50%, -50%) scale(1); filter: none; } }
+#victory .aorbit { display: none; position: absolute; left: 50%; top: 44%; width: 0; height: 0; animation: aSpin 3.2s linear infinite; }
+#victory .aorbit img { position: absolute; width: 11vmin; aspect-ratio: 1; left: -5.5vmin; top: -5.5vmin; mix-blend-mode: screen; transform: rotate(var(--a)) translateY(-38vmin) rotate(calc(-1 * var(--a)));
+  -webkit-mask-image: radial-gradient(circle, #000 50%, transparent 70%); mask-image: radial-gradient(circle, #000 50%, transparent 70%); opacity: .85; }
+#victory.aura.lv1 .aorbit { display: block; } #victory.aura.lv2 .aorbit { animation-duration: 1.6s; } #victory.aura.lv3 .aorbit { animation-duration: .7s; }
+@keyframes aSpin { to { transform: rotate(360deg); } }
+#victory .aglitch { display: none; position: absolute; inset: 0; mix-blend-mode: difference; } #victory .aglitch i { position: absolute; left: -15vw; right: -15vw; opacity: 0; }
+#victory.aura.lv3 .aglitch { display: block; }
+#victory .apts { display: none; position: absolute; left: 0; right: 0; top: 14vh; text-align: center; font: clamp(26px, 5vw, 54px) var(--display); color: #fff; letter-spacing: .06em;
+  text-shadow: 0 0 18px #fff, 0 4px 0 #000; font-variant-numeric: tabular-nums; animation: aJitT .1s steps(2) infinite; }
+#victory.aura .apts { display: block; }
+@keyframes aJitT { 0% { transform: translate(-2px, 1px) rotate(-1deg); } 100% { transform: translate(2px, -1px) rotate(1deg); } }
+#victory .aflash { display: none; position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#victory.aura .aflash { display: block; } #victory.aura.hit .aflash { animation: aFlash .35s ease-out; }
+@keyframes aFlash { 0% { opacity: .95; } 100% { opacity: 0; } }
+#victory.aura.hit { animation: aShakeAll .4s cubic-bezier(.3,.7,.4,1); }
+@keyframes aShakeAll { 0% { transform: translate(14px, -10px) scale(1.04); } 20% { transform: translate(-12px, 8px); } 40% { transform: translate(8px, 6px); } 60% { transform: translate(-6px, -4px); } 100% { transform: none; } }
+body.aurawin.auralv3 #stage { filter: grayscale(1) contrast(2.2) brightness(.8) invert(0); }
+#victory.aura.lv3 .vword { animation: vWord 5.2s cubic-bezier(.2,.9,.2,1) forwards, aJitT .07s steps(2) infinite; }
 #victory.aura::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at 50% 44%, rgba(0,0,0,.15) 0 25%, rgba(0,0,0,.88) 70%); }
 #victory.aura .vband { top: 80%; }
 #victory.aura .vstripe { background: linear-gradient(90deg, rgba(0,0,0,0), #000 14%, #161616 50%, #000 86%, rgba(0,0,0,0)); border-color: #fff; }
@@ -410,7 +435,7 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
 @keyframes vStripe { 0%, 4% { transform: translateX(-110%); } 14% { transform: translateX(0); } 86% { transform: translateX(0); opacity: 1; } 100% { transform: translateX(110%); opacity: 0; } }
 @keyframes vWord { 0%, 9% { transform: translateX(120%) skewX(-8deg); opacity: 0; } 17% { transform: translateX(-2%) skewX(-8deg); opacity: 1; } 21% { transform: translateX(0) skewX(-8deg); } 86% { transform: translateX(-3%) skewX(-8deg); opacity: 1; } 100% { transform: translateX(-120%) skewX(-8deg); opacity: 0; } }
 @keyframes vInfo { 0%, 20% { opacity: 0; transform: translateY(16px); } 28%, 86% { opacity: 1; transform: none; } 100% { opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { #victory.show .lb, #victory.show .vstripe, #victory.show .vword, #victory.show .vinfo { animation: none; transform: none; opacity: 1; } #victory.aura .aface.pop { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #victory.show .lb, #victory.show .vstripe, #victory.show .vword, #victory.show .vinfo { animation: none; transform: none; opacity: 1; } #victory.aura .aface, #victory.aura.hit, #victory .aorbit, #victory .apts, #victory.aura .aface.beat { animation: none !important; } #victory .aglitch, #victory .aflash { display: none !important; } }
 #settings { background: rgba(11,22,48,.9); z-index: 60; }
 #settings .sheet { max-width: 640px; }
 .sgroup { display: grid; gap: 10px; padding: 14px 0; border-top: 2px solid rgba(255,255,255,.12); }
@@ -612,7 +637,13 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
     <div class="vstripe"></div>
     <div class="vword">VICTORY</div>
   </div>
+  <div class="aorbit" id="auraOrbit" aria-hidden="true"></div>
+  <img class="aface ghost gr" id="auraGhostR" alt="">
+  <img class="aface ghost gc" id="auraGhostC" alt="">
   <img class="aface" id="auraFace" alt="">
+  <div class="aglitch" id="auraGlitch" aria-hidden="true"></div>
+  <div class="apts" id="auraPts" aria-hidden="true"></div>
+  <div class="aflash" aria-hidden="true"></div>
   <div class="vinfo"><span class="vname" id="vicName">YOU</span><span class="vscore" id="vicScore">5 – 0</span></div>
 </div>
 
@@ -2687,7 +2718,11 @@ function startVictory() {
     if (!auraTex.length) AURA_URIS.forEach(u => auraTex.push(new THREE.TextureLoader().load(u)));
     if (!auraHead) { auraHead = new THREE.Sprite(new THREE.SpriteMaterial({ map: auraTex[0], color: 0xffffff })); auraHead.scale.set(0.95, 0.95, 1); }
     auraHead.position.set(0, 1.72, 0); auraHead.visible = false; winner.add(auraHead);
-    $('#auraFace').removeAttribute('src');
+    $('#auraFace').removeAttribute('src'); $('#auraGhostR').removeAttribute('src'); $('#auraGhostC').removeAttribute('src');
+    const orb = $('#auraOrbit');
+    if (!orb.children.length) for (let i = 0; i < 10; i++) { const im = document.createElement('img'); im.alt = ''; im.src = AURA_URIS[i % 4]; im.style.setProperty('--a', (i * 36) + 'deg'); orb.appendChild(im); }
+    const gl = $('#auraGlitch'); if (!gl.children.length) for (let i = 0; i < 7; i++) gl.appendChild(document.createElement('i'));
+    v.classList.remove('lv1', 'lv2', 'lv3', 'hit'); S.auraBeat = -1; S.auraPts = 0; S.vshake = 0; $('#auraPts').textContent = '';
     S.auraTrack = playAuraTrack(0.3);
   } else { if (auraHead) auraHead.visible = false; sfx('fanfare'); }
 }
@@ -2727,6 +2762,18 @@ function playAuraTrack(delay) {
   [A, B, A].forEach((bar, bi) => bar.forEach(([st, n, l]) => { const step = bi * 16 + st; if (step < 34) cowbell(at(step), semi(n), l * S16 * 0.9); }));
   const bass = [[0, 55, 6], [6, 55, 2, 49], [8, 49, 6], [14, 65.4, 2], [16, 55, 6], [22, 58.3, 2, 49], [24, 49, 6], [30, 43.7, 2, 55], [32, 55, 8]];
   bass.forEach(([st, f, l, gl]) => b808(at(st), f, l * S16, gl));
+  // risers into each face slam, a crash on it, a cowbell stutter, then a huge sub drop at the end
+  const riser = (t, len) => { const src = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain(); src.buffer = noise; src.loop = true;
+    fl.type = 'bandpass'; fl.Q.value = 4; fl.frequency.setValueAtTime(400, t); fl.frequency.exponentialRampToValueAtTime(7000, t + len);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.35, t + len); g.gain.setValueAtTime(0.0001, t + len + 0.01);
+    src.connect(fl); fl.connect(g); g.connect(bus); src.start(t); src.stop(t + len + 0.05); };
+  const crash = t => { noiseHit(t, 'highpass', 3000, 0.4, 1.0); noiseHit(t, 'lowpass', 500, 0.6, 0.5); };
+  for (const st of [8, 16, 24]) { riser(at(st - 4), 4 * S16); crash(at(st)); }
+  for (let k = 0; k < 8; k++) cowbell(at(28 + k * 0.5), semi(k % 2 ? 7 : 0), S16 * 0.4);
+  b808(at(32), 55, 1.8, 30);
+  { const t = at(32), o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(); o.type = o2.type = 'sawtooth';
+    o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(90, t + 1.2); o2.frequency.setValueAtTime(893, t); o2.frequency.exponentialRampToValueAtTime(87, t + 1.2);
+    env(g, t, 0.18, 1.2); o.connect(g); o2.connect(g); g.connect(dirt); o.start(t); o2.start(t); o.stop(t + 1.3); o2.stop(t + 1.3); crash(t); }
   for (let st = 0; st < 34; st++) {
     if (st % 8 === 4) snare(at(st));
     if (st % 2 === 0) hat(at(st), st % 4 === 0 ? 0.16 : 0.1);
@@ -2735,6 +2782,7 @@ function playAuraTrack(delay) {
   return bus;
 }
 function clearAura() {
+  $('#victory').classList.remove('lv1', 'lv2', 'lv3', 'hit');
   if (S.auraTrack) { const bus = S.auraTrack; S.auraTrack = null; try { bus.gain.setTargetAtTime(0, ac.currentTime, 0.08); setTimeout(() => { try { bus.disconnect(); } catch (e) {} }, 600); } catch (e) {} } document.body.classList.remove('aurawin'); $('#victory').classList.remove('aura'); if (auraHead) auraHead.visible = false; if (winner) winner.userData.head.visible = true; S.aura = false; }
 function updateVictory(dt) {
   S.t -= dt;
@@ -2746,7 +2794,30 @@ function updateVictory(dt) {
       const f = $('#auraFace'); f.src = AURA_URIS[ph]; f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
       auraHead.material.map = auraTex[ph]; auraHead.material.needsUpdate = true; auraHead.visible = true;
       if (!S.auraTrack) sfx('aura');
+      for (const id of ['#auraGhostR', '#auraGhostC']) $(id).src = AURA_URIS[ph];
+      // every face slam: white flash, invert frame, shockwave of particles, harder shake each time
+      const v = $('#victory'); v.classList.remove('hit'); void v.offsetWidth; v.classList.add('hit');
+      if (ph >= 1) v.classList.add('lv' + Math.min(3, ph));
+      S.vshake = 0.6 + ph * 0.35;
+      burst(winner.position.clone().setY(winner.position.y + 1.3), [0xffffff, 0x000000, 0xdddddd], 26 + ph * 12, 9 + ph * 2, 0.12, 1.1);
     }
+    // a pulse on every beat, a climbing aura counter, and rising aura sparks around you
+    const beat = Math.floor((tt - 0.3) / (60 / 104));
+    if (beat !== S.auraBeat && tt > 0.3) { S.auraBeat = beat; const f = $('#auraFace'); f.classList.remove('beat'); void f.offsetWidth; f.classList.add('beat'); S.vshake = Math.max(S.vshake, 0.25); }
+    if (S.auraPh >= 0) {
+      S.auraPts += dt * Math.pow(10, 2 + S.auraPh * 1.4);
+      $('#auraPts').textContent = '+' + Math.floor(S.auraPts).toLocaleString() + ' AURA';
+    }
+    for (let i = 0; i < 2 + Math.max(0, S.auraPh); i++) {
+      const a = Math.random() * Math.PI * 2, r = rand(0.6, 1.4), m = new THREE.Mesh(cubeGeo, basic(Math.random() < 0.5 ? 0xffffff : 0x111111));
+      const sz = rand(0.04, 0.1); m.scale.setScalar(sz);
+      m.position.set(winner.position.x + Math.cos(a) * r, winner.position.y + rand(0, 0.4), winner.position.z + Math.sin(a) * r); scene.add(m);
+      fx.push({ m, v: new V3(-Math.sin(a) * 1.5, rand(2.5, 5), Math.cos(a) * 1.5), life: 1, max: 1, s: sz, grav: false, spin: rand(-8, 8) });
+    }
+    // glitch bars tear across the screen in the last phase
+    if (S.auraPh >= 3) $('#auraGlitch').querySelectorAll('i').forEach(b => {
+      if (Math.random() < 0.35) { b.style.top = rand(0, 100) + '%'; b.style.height = rand(0.4, 4) + 'vh'; b.style.transform = `translateX(${rand(-12, 12)}vw)`; b.style.opacity = Math.random() < 0.5 ? 0 : rand(0.4, 1); b.style.background = Math.random() < 0.5 ? '#fff' : '#000'; }
+    });
   }
   // emote: side-to-side groove with arms swinging together, then a big double fist pump on the beat
   const beat = tt * 6.2, sway = Math.sin(beat);
@@ -3575,11 +3646,15 @@ function updateCamera(dt) {
   }
   if (S.mode === 'victory') {
     const c = p.pos, tt = VIC_LEN - S.t, ease = 1 - Math.pow(1 - Math.min(1, tt / VIC_LEN), 2);
-    const dist = 6.2 - ease * 2.2, ang = p.yaw + 0.35 - ease * 0.55;
+    let dist = 6.2 - ease * 2.2, ang = p.yaw + 0.35 - ease * 0.55;
+    if (S.aura) { dist -= Math.max(0, S.auraPh) * 0.35; if (S.auraPh >= 3) ang += Math.pow(Math.max(0, tt - 3.76), 1.6) * 2.4; }
     const f = dirOf(ang, 0);
     camera.position.set(c.x + f.x * dist, c.y + 1.45 - ease * 0.2, c.z + f.z * dist);
+    S.vshake = Math.max(0, (S.vshake || 0) - dt * 2.2);
+    if (S.aura && S.vshake > 0) camera.position.add(new V3(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(S.vshake * 0.18));
     camera.rotation.set(0, 0, 0); camera.lookAt(c.x, c.y + 1.25, c.z);
-    camera.fov += (50 - camera.fov) * Math.min(1, dt * 4); camera.updateProjectionMatrix();
+    if (S.aura) camera.rotation.z += Math.sin(tt * 23) * S.vshake * 0.05;
+    camera.fov += ((S.aura ? 50 + S.vshake * 14 : 50) - camera.fov) * Math.min(1, dt * (S.aura ? 14 : 4)); camera.updateProjectionMatrix();
     vmRoot.visible = false; return;
   }
   if (emo.cur >= 0 && p.alive) {
