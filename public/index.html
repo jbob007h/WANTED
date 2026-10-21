@@ -3260,9 +3260,31 @@ function accelerate(f, wish, dt) {
 }
 
 /* ---------- Player ---------- */
+// owner aimbot (admin panel): turn toward the closest visible enemy head, nearest to the crosshair first
+function updateAimbot(dt) {
+  const p = player;
+  if (!adm.aim || !p.alive || emo.cur >= 0 || !canFight(p)) return;
+  const eye = eyeOf(p), fwd = dirOf(p.yaw, p.pitch);
+  let best = null, bestScore = Infinity;
+  for (const t of enemiesOf(p)) {
+    if (!t.alive) continue;
+    const head = eyeOf(t); head.y += 0.05;
+    const to = head.clone().sub(eye), dist = to.length(); if (dist > 120 || dist < 0.3) continue;
+    if (!los(eye, head)) continue;
+    const off = 1 - to.normalize().dot(fwd), score = off * 40 + dist * 0.02;
+    if (score < bestScore) { bestScore = score; best = head; }
+  }
+  if (!best) return;
+  const d = best.sub(eye), flat = Math.hypot(d.x, d.z);
+  const yaw = Math.atan2(-d.x, -d.z), pitch = Math.atan2(d.y, flat);
+  const k = 1 - Math.exp(-28 * dt);
+  p.yaw = wrap(p.yaw + wrap(yaw - p.yaw) * k);
+  p.pitch = clamp(p.pitch + (pitch - p.pitch) * k, -1.5, 1.5);
+}
 function updatePlayer(dt) {
   const p = player;
   updateEmote(dt);
+  updateAimbot(dt);
   const key = p.loadout[p.slot], w = W[key];
   if (p.alive && S.mode !== 'countdown') {
     const fwd = new V3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw)), right = new V3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
@@ -3944,7 +3966,7 @@ sl.addEventListener('input', () => { sens = +sl.value; $('#sensVal').textContent
 if (matchMedia('(pointer: coarse)').matches) $('#touchNote').hidden = false;
 
 /* ---------- Owner admin panel ---------- */
-const adm = { god: false, ammo: false, fly: false, jump: false, oneshot: false, freezeBot: false, night: false, speed: 1 };
+const adm = { aim: false, god: false, ammo: false, fly: false, jump: false, oneshot: false, freezeBot: false, night: false, speed: 1 };
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const lights = { hemi: scene.children.find(o => o.isHemisphereLight), amb: scene.children.find(o => o.isAmbientLight), sky: DEFAULT_SKY };
 function setNight(on) {
@@ -3974,6 +3996,7 @@ function renderAdmin() {
         ${tog('god', 'God mode', 'Take no damage')}
         ${tog('ammo', 'Infinite ammo', 'Ammo, uses and fuel never run out')}
         ${tog('oneshot', 'One-shot', 'Every hit is a kill')}
+        ${tog('aim', 'Aimbot', 'Locks onto the nearest enemy\'s head')}
         ${tog('fly', 'Fly', 'Space to rise, C to sink')}
         ${tog('jump', 'Super jump', 'Jump about 3× higher')}
       </div>
