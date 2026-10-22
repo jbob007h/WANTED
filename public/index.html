@@ -402,10 +402,15 @@ kbd { font: 12px var(--display); border: 2px solid var(--ink); border-bottom-wid
 @keyframes gJitC { 0% { transform: translate(-50%, -50%) translate(8px, -2px); } 100% { transform: translate(-50%, -50%) translate(4px, 3px) scale(1.03); } }
 #victory.aura .aface.beat:not(.ghost) { animation: aBeat .3s ease-out, aJit .14s steps(2) infinite; }
 @keyframes aBeat { 0% { transform: translate(-50%, -50%) scale(1.14); filter: brightness(1.8); } 100% { transform: translate(-50%, -50%) scale(1); filter: none; } }
-#victory .aorbit { display: none; position: absolute; left: 50%; top: 44%; width: 0; height: 0; animation: aSpin 3.2s linear infinite; }
-#victory .aorbit img { position: absolute; width: 11vmin; aspect-ratio: 1; left: -5.5vmin; top: -5.5vmin; mix-blend-mode: screen; transform: rotate(var(--a)) translateY(-38vmin) rotate(calc(-1 * var(--a)));
+#victory .afwrap { position: absolute; inset: 0; transform-origin: 50% 44%; will-change: transform; }
+#victory .aface.old { mix-blend-mode: screen; opacity: 0; }
+#victory .aface.old.out { animation: aOut .5s ease-out forwards; }
+@keyframes aOut { 0% { opacity: .9; transform: translate(-50%, -50%) scale(1); filter: blur(0); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.45) rotate(8deg); filter: blur(10px); } }
+#victory .aorbit { display: none; position: absolute; left: 50%; top: 44%; width: 0; height: 0; }
+#victory .aorbit img { position: absolute; width: 11vmin; aspect-ratio: 1; left: -5.5vmin; top: -5.5vmin; mix-blend-mode: screen; transform: rotate(var(--a)) translateY(-38vmin) rotate(calc(-1 * var(--a))); will-change: transform, opacity;
   -webkit-mask-image: radial-gradient(circle, #000 50%, transparent 70%); mask-image: radial-gradient(circle, #000 50%, transparent 70%); opacity: .85; }
-#victory.aura.lv1 .aorbit { display: block; } #victory.aura.lv2 .aorbit { animation-duration: 1.6s; } #victory.aura.lv3 .aorbit { animation-duration: .7s; }
+#victory.aura .aorbit { display: block; }
+@media (prefers-reduced-motion: reduce) { #victory.aura .aorbit { display: none; } #victory.aura.lv1 .aorbit { display: block; animation: aSpin 3.2s linear infinite; } }
 @keyframes aSpin { to { transform: rotate(360deg); } }
 #victory .aglitch { display: none; position: absolute; inset: 0; mix-blend-mode: difference; } #victory .aglitch i { position: absolute; left: -15vw; right: -15vw; opacity: 0; }
 #victory.aura.lv3 .aglitch { display: block; }
@@ -638,9 +643,12 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
     <div class="vword">VICTORY</div>
   </div>
   <div class="aorbit" id="auraOrbit" aria-hidden="true"></div>
-  <img class="aface ghost gr" id="auraGhostR" alt="">
-  <img class="aface ghost gc" id="auraGhostC" alt="">
-  <img class="aface" id="auraFace" alt="">
+  <div class="afwrap" id="auraWrap">
+    <img class="aface old" id="auraFaceOld" alt="">
+    <img class="aface ghost gr" id="auraGhostR" alt="">
+    <img class="aface ghost gc" id="auraGhostC" alt="">
+    <img class="aface" id="auraFace" alt="">
+  </div>
   <div class="aglitch" id="auraGlitch" aria-hidden="true"></div>
   <div class="apts" id="auraPts" aria-hidden="true"></div>
   <div class="aflash" aria-hidden="true"></div>
@@ -2718,11 +2726,12 @@ function startVictory() {
     if (!auraTex.length) AURA_URIS.forEach(u => auraTex.push(new THREE.TextureLoader().load(u)));
     if (!auraHead) { auraHead = new THREE.Sprite(new THREE.SpriteMaterial({ map: auraTex[0], color: 0xffffff })); auraHead.scale.set(0.95, 0.95, 1); }
     auraHead.position.set(0, 1.72, 0); auraHead.visible = false; winner.add(auraHead);
-    $('#auraFace').removeAttribute('src'); $('#auraGhostR').removeAttribute('src'); $('#auraGhostC').removeAttribute('src');
+    $('#auraFace').removeAttribute('src'); $('#auraFaceOld').removeAttribute('src'); $('#auraGhostR').removeAttribute('src'); $('#auraGhostC').removeAttribute('src');
     const orb = $('#auraOrbit');
     if (!orb.children.length) for (let i = 0; i < 10; i++) { const im = document.createElement('img'); im.alt = ''; im.src = AURA_URIS[i % 4]; im.style.setProperty('--a', (i * 36) + 'deg'); orb.appendChild(im); }
     const gl = $('#auraGlitch'); if (!gl.children.length) for (let i = 0; i < 7; i++) gl.appendChild(document.createElement('i'));
     v.classList.remove('lv1', 'lv2', 'lv3', 'hit'); S.auraBeat = -1; S.auraPts = 0; S.vshake = 0; $('#auraPts').textContent = '';
+    S.orbA = 0; S.orbSpd = 0; S.orbR = 0; S.phT = 0;
     S.auraTrack = playAuraTrack(0.3);
   } else { if (auraHead) auraHead.visible = false; sfx('fanfare'); }
 }
@@ -2795,7 +2804,9 @@ function playAuraTrack(delay) {
     env(g, t, 0.14, 1.2); o.connect(g); o2.connect(g); g.connect(dirt); o.start(t); o2.start(t); o.stop(t + 1.3); o2.stop(t + 1.3); crash(t); }
   return bus;
 }
+const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
 function clearAura() {
+  const w = $('#auraWrap'); if (w) w.style.transform = '';
   $('#victory').classList.remove('lv1', 'lv2', 'lv3', 'hit');
   if (S.auraTrack) { const bus = S.auraTrack; S.auraTrack = null; try { bus.gain.setTargetAtTime(0, ac.currentTime, 0.08); setTimeout(() => { try { bus.disconnect(); } catch (e) {} }, 600); } catch (e) {} } document.body.classList.remove('aurawin'); $('#victory').classList.remove('aura'); if (auraHead) auraHead.visible = false; if (winner) winner.userData.head.visible = true; S.aura = false; }
 function updateVictory(dt) {
@@ -2805,7 +2816,10 @@ function updateVictory(dt) {
     const ph = tt < 0.3 ? -1 : Math.min(3, Math.floor((tt - 0.3) / 1.15));
     if (ph !== S.auraPh && ph >= 0) {
       S.auraPh = ph;
-      const f = $('#auraFace'); f.src = AURA_URIS[ph]; f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
+      const f = $('#auraFace'), old = $('#auraFaceOld');
+      if (f.getAttribute('src')) { old.src = f.getAttribute('src'); old.classList.remove('out'); void old.offsetWidth; old.classList.add('out'); }
+      S.phT = 0;
+      f.src = AURA_URIS[ph]; f.classList.remove('pop'); void f.offsetWidth; f.classList.add('pop');
       auraHead.material.map = auraTex[ph]; auraHead.material.needsUpdate = true; auraHead.visible = true;
       if (!S.auraTrack) sfx('aura');
       for (const id of ['#auraGhostR', '#auraGhostC']) $(id).src = AURA_URIS[ph];
@@ -2814,6 +2828,22 @@ function updateVictory(dt) {
       if (ph >= 1) v.classList.add('lv' + Math.min(3, ph));
       S.vshake = 0.6 + ph * 0.35;
       burst(winner.position.clone().setY(winner.position.y + 1.3), [0xffffff, 0x000000, 0xdddddd], 26 + ph * 12, 9 + ph * 2, 0.12, 1.1);
+    }
+    // smooth motion: the face floats, sways and slowly zooms through each phase; the orbit eases in and speeds up
+    if (!reduceMotion()) {
+      S.phT = (S.phT || 0) + dt;
+      const e = 1 - Math.pow(1 - Math.min(1, S.phT / 1.15), 3);
+      const bob = Math.sin(tt * 2.1) * 1.4, sway = Math.sin(tt * 1.3) * 3.5, breathe = 1 + Math.sin(tt * 3.4) * 0.025;
+      $('#auraWrap').style.transform = `translate(${Math.sin(tt * 0.9) * 1.2}vw, ${bob}vh) rotate(${sway}deg) scale(${(0.94 + e * 0.1) * breathe})`;
+      const lv = Math.max(0, S.auraPh);
+      const spdT = lv >= 3 ? 9 : lv >= 2 ? 4 : lv >= 1 ? 2 : 0, rT = lv >= 1 ? 38 + Math.sin(tt * 2.6) * 3 : 0;
+      S.orbSpd += (spdT - S.orbSpd) * Math.min(1, dt * 2.5); S.orbR += (rT - S.orbR) * Math.min(1, dt * 3.5); S.orbA += S.orbSpd * dt;
+      const imgs = $('#auraOrbit').children;
+      for (let i = 0; i < imgs.length; i++) {
+        const a = S.orbA + i * Math.PI / 5, sc = 0.85 + 0.2 * Math.sin(tt * 4 + i);
+        imgs[i].style.transform = `translate(${(Math.sin(a) * S.orbR).toFixed(2)}vmin, ${(-Math.cos(a) * S.orbR).toFixed(2)}vmin) rotate(${(Math.sin(tt * 3 + i) * 12).toFixed(1)}deg) scale(${sc.toFixed(3)})`;
+        imgs[i].style.opacity = Math.min(0.85, S.orbR / 30).toFixed(2);
+      }
     }
     // a pulse on every beat, a climbing aura counter, and rising aura sparks around you
     const beat = Math.floor((tt - 0.3) / (60 / 104));
