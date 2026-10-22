@@ -524,6 +524,9 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
 .admlist li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: rgba(255,255,255,.06); border-radius: 10px; padding: 6px 10px; }
 .admlist .nm { font: 17px var(--display); min-width: 0; overflow-wrap: anywhere; }
 .admlist .st { color: var(--muted); font-size: 13px; margin-right: auto; }
+.gift { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; align-items: end; }
+.gift label { display: grid; gap: 4px; } .gift label[hidden] { display: none; } .gift label span { color: var(--muted); font-size: 13px; }
+.gift select, .gift input { min-width: 0; font: 15px var(--body); font-weight: 600; border: 3px solid var(--ink); border-radius: 10px; padding: 7px 8px; background: #fff; color: var(--ink); }
 .admann { display: flex; gap: 8px; flex-wrap: wrap; }
 .admann input { flex: 1 1 220px; min-width: 0; font: 16px var(--body); font-weight: 600; border: 3px solid var(--ink); border-radius: 10px; padding: 8px 10px; }
 #adminBody { display: grid; gap: 16px; }
@@ -4371,6 +4374,31 @@ const TELEPORTS = [
   ['Above the lobby', () => new V3(LX, 18, LZ)]
 ];
 const inGame = () => ['lobby', 'live', 'countdown', 'roundEnd'].includes(S.mode);
+function giftTargets() {
+  if (!lobby.room) return [];
+  const where = { lobby: 'in the lobby', duel: 'in a player duel', bot: 'in a bot duel', menu: 'in the menu' };
+  const out = [];
+  for (const p of lobby.room.peers()) {
+    if (p.sameTab || p.isMe || p.kind !== 'viewer') continue;
+    const pr = p.presence || {}; const nm = typeof pr.nm === 'string' && NAME_RE.test(pr.nm) ? pr.nm : null;
+    if (nm) out.push({ peer: p.peer, name: nm, where: where[pr.md] || 'online' });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
+function wireGift() {
+  const kind = $('#giftKind'); if (!kind) return;
+  const show = () => { const k = kind.value; $('#adminBody .gk').hidden = k !== 'keys'; $('#adminBody .gw').hidden = k !== 'weapon' && k !== 'skin'; $('#adminBody .gs').hidden = k !== 'skin'; $('#adminBody .gp').hidden = k !== 'pass'; };
+  kind.addEventListener('change', show); show();
+  $('#giftSend').addEventListener('click', () => {
+    const k = kind.value, to = $('#giftTo').value, name = $('#giftTo').selectedOptions[0].textContent.split(' · ')[0];
+    const g = k === 'keys' ? { k, n: Math.floor(+$('#giftKeys').value) } : k === 'weapon' ? { k, w: $('#giftWeapon').value } : k === 'skin' ? { k, w: $('#giftWeapon').value, s: $('#giftSkin').value } : { k, p: $('#giftPass').value };
+    const what = giftLabel(g), msg = $('#giftMsg');
+    if (!what) { msg.textContent = k === 'skin' ? 'That weapon can’t wear skins.' : 'Pick a number of keys from 1 to 100,000.'; return; }
+    lobby.room.emit('admin', { a: 'gift', to, g, from: myName || OWNER_NAME })
+      .then(() => { msg.textContent = `Sent ${what} to ${name}.`; sfx('buy'); })
+      .catch(() => { msg.textContent = 'Couldn’t send the gift: only the owner can.'; });
+  });
+}
 function renderAdmin() {
   const tog = (k, label, sub) => `<button type="button" class="admt ${adm[k] ? 'on' : ''}" data-tog="${k}" aria-pressed="${adm[k]}"><b>${label}</b><span>${sub}</span></button>`;
   const lob = S.mode === 'lobby', live = S.mode === 'live';
@@ -4399,6 +4427,23 @@ function renderAdmin() {
     <section class="admsec"><h2>World</h2>
       <div class="admgrid">${tog('night', 'Night mode', 'Dark sky, dim lights')}</div>
     </section>
+    <section class="admsec"><h2>Gift</h2>
+      ${!lobby.room ? '<p class="admnote">Gifting needs a signed-in view of the game.</p>' : (() => {
+        const online = giftTargets();
+        if (!online.length) return '<p class="admnote">Nobody else is online right now. Gifts go to players who have the game open.</p>';
+        const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+        return `<div class="gift">
+          <label><span>Player</span><select id="giftTo">${online.map(o => opt(o.peer, o.name + ' · ' + o.where)).join('')}</select></label>
+          <label><span>Gift</span><select id="giftKind">${opt('keys', 'Keys')}${opt('weapon', 'Weapon')}${opt('skin', 'Skin')}${opt('pass', 'Game pass')}</select></label>
+          <label class="gk"><span>Keys</span><input id="giftKeys" type="number" min="1" max="100000" step="50" value="500"></label>
+          <label class="gw" hidden><span>Weapon</span><select id="giftWeapon">${Object.keys(W).map(k => opt(k, W[k].name)).join('')}</select></label>
+          <label class="gs" hidden><span>Skin</span><select id="giftSkin">${Object.keys(SKINS).filter(k => k !== 'default' && !SKINS[k].ownerOnly).map(k => opt(k, SKINS[k].name)).join('')}</select></label>
+          <label class="gp" hidden><span>Pass</span><select id="giftPass">${Object.keys(PASSES).map(k => opt(k, PASSES[k].name)).join('')}</select></label>
+          <button type="button" class="admb" id="giftSend">🎁 Send gift</button>
+        </div>`;
+      })()}
+      <p class="admnote" id="giftMsg" role="status"></p>
+    </section>
     <section class="admsec"><h2>Lobby players</h2>
       ${!lobby.room ? '<p class="admnote">Not connected to the game server.</p>'
         : players.length ? `<ul class="admlist">${players.map(r => `<li><span class="nm">${esc(r.name)}</span><span class="st">${r.inZone ? 'In Duel Zone' : 'Safe'} · ${Math.round(r.hp)} HP</span><button type="button" class="admb" data-pa="spawn" data-peer="${esc(r.peer)}">Send to spawn</button><button type="button" class="admb" data-pa="heal" data-peer="${esc(r.peer)}">Heal</button></li>`).join('')}</ul>
@@ -4407,6 +4452,7 @@ function renderAdmin() {
       <form class="admann" id="admAnnForm"><label class="sr" for="admAnn">Announcement</label><input id="admAnn" maxlength="60" placeholder="Announcement for everyone in the lobby" autocomplete="off"><button type="submit" class="admb" ${lobby.room ? '' : 'disabled'}>Announce</button></form>
       <p class="admnote" id="admMsg" role="status"></p>
     </section>`;
+  wireGift();
   $('#admSpeed').addEventListener('input', e => { adm.speed = +e.target.value; $('#admSpeedVal').textContent = adm.speed.toFixed(1) + '×'; });
   $('#admAnnForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -4448,9 +4494,30 @@ $('#adminClose').addEventListener('click', closeAdmin);
 addEventListener('keydown', e => { if ((e.code === 'Escape' || e.code === 'KeyK') && !$('#admin').hidden && !(e.target && e.target.id === 'admAnn')) { e.preventDefault(); closeAdmin(); } });
 $('#adminBtn').addEventListener('click', openAdmin);
 $('#pauseAdmin').addEventListener('click', () => { $('#pause').hidden = true; S.inAdmin = true; renderAdmin(); $('#admin').hidden = false; });
+// gifts from the owner, sent live with the owner-only 'admin' topic
+function giftLabel(g) {
+  if (!g || typeof g !== 'object') return null;
+  if (g.k === 'keys') { const n = Math.floor(Number(g.n)); return n >= 1 && n <= 100000 ? `${n.toLocaleString()} keys` : null; }
+  if (g.k === 'weapon') return W[g.w] ? `the ${W[g.w].name}` : null;
+  if (g.k === 'skin') return W[g.w] && canSkin(g.w) && SKINS[g.s] && !SKINS[g.s].ownerOnly && g.s !== 'default' ? `${SKINS[g.s].name} for the ${W[g.w].name}` : null;
+  if (g.k === 'pass') return PASSES[g.p] ? `the ${PASSES[g.p].name} game pass` : null;
+  return null;
+}
+function receiveGift(g, from) {
+  const what = giftLabel(g); if (!what) return;
+  if (g.k === 'keys') wallet += Math.floor(Number(g.n));
+  if (g.k === 'weapon') owned.add(g.w);
+  if (g.k === 'skin') { if (g.s === 'enargade') enargadeEarned = true; else skinsOwned.add(g.w + ':' + g.s); }
+  if (g.k === 'pass') passes.add(g.p);
+  save(); renderWallet(); renderLoadout(); if (!$('#shop').hidden) renderShop();
+  const who = typeof from === 'string' && NAME_RE.test(from) ? from : 'The owner';
+  showAnnouncement(`${who} gifted you ${what}!`, '🎁 GIFT'); sfx('buy');
+  addFeed(`<span class="hs">🎁 ${esc(who)} gifted you ${esc(what)}</span>`);
+}
 function onNetAdmin(msg) {
   const d = msg.data; if (!d || typeof d !== 'object' || msg.sameTab) return;
   if (d.to !== '*' && d.to !== lobby.myPeer) return;
+  if (d.a === 'gift') { receiveGift(d.g, d.from); return; }
   if (d.a === 'enargade') {
     if (ownerMode) return;
     const first = !enargadeEarned; enargadeEarned = true; save();
@@ -4462,8 +4529,9 @@ function onNetAdmin(msg) {
   if (d.a === 'heal') { player.hp = 100; player.burnT = 0; S.healFx = 1; sfx('heal'); }
 }
 let annTimer = 0;
-function showAnnouncement(t) {
+function showAnnouncement(t, label) {
   const el = $('#announce');
+  el.querySelector('.al').textContent = label || 'ANNOUNCEMENT';
   el.querySelector('.at').textContent = t;
   el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(annTimer); annTimer = setTimeout(() => { el.hidden = true; }, 6000);
