@@ -982,9 +982,9 @@ const maxDash = f => (f === player && hasPass('dash3') ? 3 : 2);
 const streakBonus = n => Math.min(n, 10) * 5; // +5 keys per win in your streak, up to +50
 const keyMult = () => (hasPass('keys2x') ? 2 : 1) * (hasPass('vip') ? 1.25 : 1);
 // Enargade is the owner's skin; knocking the owner out in the Duel Zone earns it
-let enargadeEarned = false;
+let enargadeEarned = false, magniteGifted = false; // Magnite is owner-only unless the owner gifts it
 // owner skins: Enargade can also be earned by knocking out the owner; Magnite is owner-only
-const skinUnlocked = sk => !SKINS[sk] || !SKINS[sk].owner || ownerMode || (sk === 'enargade' && enargadeEarned);
+const skinUnlocked = sk => !SKINS[sk] || !SKINS[sk].owner || ownerMode || (sk === 'enargade' && enargadeEarned) || (sk === 'magnite' && magniteGifted);
 const skinEquip = {};
 const canSkin = k => W[k] && !W[k].jet;
 const owned = new Set(Object.keys(W).filter(k => W[k].price === 0));
@@ -999,6 +999,7 @@ try {
   if (PRIMARIES.includes(s.pick)) equip.primary = s.pick;
   if (s.equip) SLOTS.forEach(sl => { const k = s.equip[sl]; if (W[k] && W[k].slot === sl && owned.has(k)) equip[sl] = k; });
   if (s.eg === 1) enargadeEarned = true;
+  if (s.mg === 1) magniteGifted = true;
   if (typeof s.map === 'string') mapPick = s.map;
   if (Number.isInteger(s.lk) && s.lk >= 0) lifeKills = s.lk;
   if (Number.isInteger(s.ws) && s.ws >= 0) streak = s.ws; if (Number.isInteger(s.bs) && s.bs >= 0) bestStreak = Math.max(s.bs, streak);
@@ -1006,7 +1007,7 @@ try {
   if (Array.isArray(s.skins)) s.skins.forEach(id => { const [k, sk] = String(id).split(':'); if (canSkin(k) && SKINS[sk]) skinsOwned.add(k + ':' + sk); });
   if (s.skinEquip && typeof s.skinEquip === 'object') for (const k in s.skinEquip) { const sk = s.skinEquip[k]; if (canSkin(k) && SKINS[sk] && (sk === 'default' || skinsOwned.has(k + ':' + sk) || passes.has('vault') || SKINS[sk].owner)) skinEquip[k] = sk; }
 } catch (e) {}
-const save = () => { clearTimeout(boardT); boardT = setTimeout(() => writeBoard(), 1500); try { localStorage.setItem('duelground', JSON.stringify({ diff, sens, keys: wallet, owned: [...owned], equip, skins: [...skinsOwned], passes: [...passes], skinEquip, eg: enargadeEarned ? 1 : 0, map: mapPick, cfg, ws: streak, bs: bestStreak, lk: lifeKills })); } catch (e) {} };
+const save = () => { clearTimeout(boardT); boardT = setTimeout(() => writeBoard(), 1500); try { localStorage.setItem('duelground', JSON.stringify({ diff, sens, keys: wallet, owned: [...owned], equip, skins: [...skinsOwned], passes: [...passes], skinEquip, eg: enargadeEarned ? 1 : 0, mg: magniteGifted ? 1 : 0, map: mapPick, cfg, ws: streak, bs: bestStreak, lk: lifeKills })); } catch (e) {} };
 
 /* ---------- Renderer & scene ---------- */
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -4030,7 +4031,7 @@ function renderSkins() {
     return `<div class="scard ${on ? 'eq' : ''}" data-s="${sk}">
       <div class="swatch" style="background:${s.css}"><svg viewBox="0 0 48 24" fill="currentColor" aria-hidden="true">${ICON[skinWeapon]}</svg></div>
       ${s.owner ? '<span class="tag">OWNER</span>' : (SKIN_SCROLL[sk] || SKIN_GLOW[sk]) ? '<span class="tag anim">ANIMATED</span>' : ''}
-      <span class="cn">${s.name}</span><span class="cr">${s.owner ? (ownerMode ? 'Owner exclusive · ' : s.ownerOnly ? 'Only judahpro5555 can use this · ' : enargadeEarned ? 'Earned by beating the owner · ' : 'Beat judahpro5555 in the Duel Zone · ') : ''}${W[skinWeapon].name} skin</span>
+      <span class="cn">${s.name}</span><span class="cr">${s.owner ? (ownerMode ? 'Owner exclusive · ' : s.ownerOnly ? (magniteGifted ? 'Gifted by the owner · ' : 'Only judahpro5555 can use this · ') : enargadeEarned ? 'Earned by beating the owner · ' : 'Beat judahpro5555 in the Duel Zone · ') : ''}${W[skinWeapon].name} skin</span>
       ${btn}
     </div>`;
   }).join('');
@@ -4437,7 +4438,7 @@ function renderAdmin() {
           <label><span>Gift</span><select id="giftKind">${opt('keys', 'Keys')}${opt('weapon', 'Weapon')}${opt('skin', 'Skin')}${opt('pass', 'Game pass')}</select></label>
           <label class="gk"><span>Keys</span><input id="giftKeys" type="number" min="1" max="100000" step="50" value="500"></label>
           <label class="gw" hidden><span>Weapon</span><select id="giftWeapon">${Object.keys(W).map(k => opt(k, W[k].name)).join('')}</select></label>
-          <label class="gs" hidden><span>Skin</span><select id="giftSkin">${Object.keys(SKINS).filter(k => k !== 'default' && !SKINS[k].ownerOnly).map(k => opt(k, SKINS[k].name)).join('')}</select></label>
+          <label class="gs" hidden><span>Skin</span><select id="giftSkin">${Object.keys(SKINS).filter(k => k !== 'default').map(k => opt(k, SKINS[k].name)).join('')}</select></label>
           <label class="gp" hidden><span>Pass</span><select id="giftPass">${Object.keys(PASSES).map(k => opt(k, PASSES[k].name)).join('')}</select></label>
           <button type="button" class="admb" id="giftSend">🎁 Send gift</button>
         </div>`;
@@ -4499,7 +4500,7 @@ function giftLabel(g) {
   if (!g || typeof g !== 'object') return null;
   if (g.k === 'keys') { const n = Math.floor(Number(g.n)); return n >= 1 && n <= 100000 ? `${n.toLocaleString()} keys` : null; }
   if (g.k === 'weapon') return W[g.w] ? `the ${W[g.w].name}` : null;
-  if (g.k === 'skin') return W[g.w] && canSkin(g.w) && SKINS[g.s] && !SKINS[g.s].ownerOnly && g.s !== 'default' ? `${SKINS[g.s].name} for the ${W[g.w].name}` : null;
+  if (g.k === 'skin') return W[g.w] && canSkin(g.w) && SKINS[g.s] && g.s !== 'default' ? `${SKINS[g.s].name} for the ${W[g.w].name}` : null;
   if (g.k === 'pass') return PASSES[g.p] ? `the ${PASSES[g.p].name} game pass` : null;
   return null;
 }
@@ -4507,7 +4508,7 @@ function receiveGift(g, from) {
   const what = giftLabel(g); if (!what) return;
   if (g.k === 'keys') wallet += Math.floor(Number(g.n));
   if (g.k === 'weapon') owned.add(g.w);
-  if (g.k === 'skin') { if (g.s === 'enargade') enargadeEarned = true; else skinsOwned.add(g.w + ':' + g.s); }
+  if (g.k === 'skin') { if (g.s === 'enargade') enargadeEarned = true; else if (g.s === 'magnite') magniteGifted = true; else skinsOwned.add(g.w + ':' + g.s); }
   if (g.k === 'pass') passes.add(g.p);
   save(); renderWallet(); renderLoadout(); if (!$('#shop').hidden) renderShop();
   const who = typeof from === 'string' && NAME_RE.test(from) ? from : 'The owner';
