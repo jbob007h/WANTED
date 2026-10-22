@@ -33,6 +33,7 @@ function dbAllowed(client, op, p) {
   const parts = p.split('/');
   if (parts.length % 2 !== 0) return false;                  // documents only
   if (parts[0] === 'names' && parts.length === 2) return true;
+  if (parts[0] === 'build' && parts[1] === 'lobby' && parts.length === 2) return op === 'get' || client.admin; // owner's lobby builds: everyone reads, only the owner writes
   if (parts[0] === 'lb' && parts.length === 2) return op === 'get' || parts[1] === client.uid; // leaderboard: read anyone, write only your own row
   if (parts[0] === 'data' && parts[1] === 'users') return parts[2] === client.uid; // your own data only
   return false;
@@ -174,7 +175,7 @@ function onMessage(c, text) {
     const p = m.path;
     if (m.op === 'get') { reply(true, p in store ? { exists: true, data: store[p] } : { exists: false }); return; }
     if (m.op === 'set') {
-      if (!m.data || typeof m.data !== 'object' || JSON.stringify(m.data).length > 2048) { reply(false, { code: 'invalid_argument' }); return; }
+      if (!m.data || typeof m.data !== 'object' || JSON.stringify(m.data).length > (p === 'build/lobby' ? 60000 : 2048)) { reply(false, { code: 'invalid_argument' }); return; }
       if (p.startsWith('names/')) {
         // a name document always belongs to whoever wrote it, and the owner's name is reserved
         const key = p.slice(6), cur = store[p];

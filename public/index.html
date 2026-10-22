@@ -483,6 +483,13 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
 #xprev .dot { width: 2px; height: 2px; left: -1px; top: -1px; border-radius: 50%; }
 @media (max-width: 520px) { .srow { grid-template-columns: 1fr 48px; } .srow > span:first-child { grid-column: 1 / -1; } }
 .setbtn { background: linear-gradient(180deg, #ffffff, #d7e3ff); }
+#buildBar { position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 10px 14px; max-width: calc(100vw - 32px);
+  background: rgba(11,22,48,.85); border: 3px solid var(--ink); border-radius: 12px; padding: 8px 14px; color: #fff; font: 14px system-ui, sans-serif; box-shadow: 0 4px 0 var(--ink); }
+#buildBar b { font: 18px var(--display); letter-spacing: .08em; color: var(--gold); } #buildBar .bshape { font: 16px var(--display); }
+#buildBar kbd { font: 11px system-ui, sans-serif; background: rgba(255,255,255,.15); border-radius: 4px; padding: 1px 4px; }
+#buildBar .bcols { display: flex; gap: 4px; } #buildBar .bcols i { width: 26px; height: 26px; border: 2px solid var(--ink); border-radius: 6px; display: grid; place-items: end start; }
+#buildBar .bcols i kbd { background: rgba(11,22,48,.7); color: #fff; font-size: 9px; padding: 0 3px; } #buildBar .bcols i.on { outline: 3px solid var(--gold); outline-offset: 1px; }
+#buildBar .bhelp { opacity: .85; }
 #wxTint { position: fixed; inset: 0; z-index: 2; pointer-events: none; transition: background 1.2s ease; }
 #wxFlash { position: fixed; inset: 0; z-index: 3; pointer-events: none; background: #eef3ff; opacity: 0; }
 #wxBadge { position: fixed; top: 10px; right: 12px; z-index: 35; pointer-events: none; font: 14px var(--display); letter-spacing: .05em; color: #fff; background: rgba(11,22,48,.7); border: 2px solid var(--ink); border-radius: 8px; padding: 3px 10px; }
@@ -565,6 +572,7 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
   <div id="feed"></div>
   <div id="lobbyBar" hidden><span class="lb-title">LOBBY</span><span class="lb-online" id="lbOnline">Solo</span><span class="lb-zone" id="lbZone">SAFE</span></div>
   <div id="padTip" hidden></div>
+  <div id="buildBar" hidden></div>
   <div id="scope"></div>
   <div id="cross"><i></i><i></i><i></i><i></i><i class="dot"></i></div>
   <div id="hitmark"><i></i><i></i><i></i><i></i></div>
@@ -1550,7 +1558,7 @@ function buildLobbyProps() {
 buildLobbyProps();
 
 function inZoneXZ(p) { return p.x > ZONE.x0 && p.x < ZONE.x1 && p.z > ZONE.z0 && p.z < ZONE.z1; }
-function canFight(f) { if (S.mode === 'live') return true; return S.mode === 'lobby' && f === player && player.inZone && player.alive; }
+function canFight(f) { if (S.mode === 'live') return true; if (build.on) return false; return S.mode === 'lobby' && f === player && player.inZone && player.alive; }
 function lobbyTargets() {
   if (!player.inZone) return [];
   const out = lobby.dummies.filter(d => d.alive);
@@ -1837,6 +1845,7 @@ function setChallenge(peer) {
   lobby.challenge = peer; lobby.sendT = 0;
 }
 function startPvp(oppPeer, oppName, map) {
+  toggleBuild(false);
   const id = duelId(lobby.myPeer, oppPeer);
   if (!MAPS[map]) map = duelMap(id, null);
   initAudio(); clearProjectiles(); endPvp(true);
@@ -1916,7 +1925,7 @@ function enterLobby() {
   lock();
 }
 function startBotMatch() {
-  initAudio(); clearProjectiles(); endPvp();
+  initAudio(); clearProjectiles(); endPvp(); toggleBuild(false);
   $('#menu').hidden = true; $('#end').hidden = true; $('#pause').hidden = true; $('#hud').hidden = false;
   $('#score').hidden = false; $('#lobbyBar').hidden = true; $('#padTip').hidden = true;
   S.paused = false; S.inShop = false; lastSlots = ''; player.inZone = false;
@@ -3865,6 +3874,7 @@ function frame(now) {
   tickSkins(rdt, now);
   tickPreview(rdt);
   updateWeather(rdt);
+  updateBuild();
   updateFx(dt);
   updateCamera(dt);
   if (S.mode !== 'menu' && S.mode !== 'victory') updateHud(dt);
@@ -3908,6 +3918,7 @@ canvas.addEventListener('mousedown', e => {
   if (S.paused || S.mode === 'menu') return;
   if (!locked() && !noLock) { lock(); return; }
   if (emo.open) { if (e.button === 0 && emo.sel >= 0) startEmote(emo.sel); else closeWheel(); return; }
+  if (build.on) { buildClick(e.button); return; }
   if (e.button === 0) { mouse.l = true; mouse.consumed = false; }
   if (e.button === 2) aiming = true;
 });
@@ -3924,6 +3935,8 @@ addEventListener('keydown', e => {
   if (e.code === 'Space') e.preventDefault();
   keys[e.code] = true;
   if (S.paused) return;
+  if (e.code === 'KeyN' && ownerMode && !e.repeat && S.mode === 'lobby') { toggleBuild(); return; }
+  if (buildKey(e)) return;
   if (e.code === 'KeyR') startReload(player);
   if (e.code === 'KeyK' && ownerMode && !e.repeat) { openAdmin(); return; }
   if (e.code === 'ControlLeft' || e.code === 'ControlRight') e.preventDefault();
@@ -4358,6 +4371,7 @@ renderName();
   } catch (e) {}
   renderName();
   writeBoard();
+  loadBuild();
 })();
 $('#diff').querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.d === diff); b.addEventListener('click', () => { diff = b.dataset.d; $('#diff').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); save(); }); });
 $('#mapPick').querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.m === mapPick); b.addEventListener('click', () => { mapPick = b.dataset.m; $('#mapPick').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); save(); }); });
@@ -4518,6 +4532,113 @@ function updateWeather(dt) {
   }
 }
 
+/* ---------- Build mode (owner only, in the lobby) ---------- */
+// N toggles it. Aim and click to place a block, right-click a built block to delete it, 1-8 colour,
+// Tab shape, R rotate. Builds are saved to the shared database ('build/lobby') so everyone sees them.
+const BUILD_COLORS = [0xffffff, 0x6d727d, 0x2f8cff, 0xff4b5c, 0x4be37a, 0xffd23f, 0x9b6bff, 0x2a2f3c];
+const BUILD_SHAPES = [{ name: 'Cube', s: [1, 1, 1] }, { name: 'Slab', s: [2, 0.5, 2] }, { name: 'Wall', s: [2, 2, 0.5] }, { name: 'Pillar', s: [0.5, 3, 0.5] }, { name: 'Big block', s: [2, 2, 2] }, { name: 'Step', s: [1, 0.5, 1] }];
+const BUILD_MAX = 800;
+const build = { on: false, color: 2, shape: 0, rot: false, blocks: [], ghost: null, target: null, saveT: 0, del: null, loaded: false };
+function buildSize() { const s = BUILD_SHAPES[build.shape].s; return build.rot ? [s[2], s[1], s[0]] : s.slice(); }
+function addBuildBlock(b) {
+  const [x, y, z, w, h, d, c] = b;
+  const m = addBox(x, y, z, w, h, d, 0);
+  m.material = tinted(BUILD_COLORS[c] ?? 0xffffff);
+  const box = boxes[boxes.length - 1];
+  const rec = { b, m, box }; m.userData.build = rec; box.build = rec; build.blocks.push(rec); return rec;
+}
+function removeBuildBlock(rec) {
+  scene.remove(rec.m); const i = boxes.indexOf(rec.box); if (i >= 0) boxes.splice(i, 1);
+  const j = build.blocks.indexOf(rec); if (j >= 0) build.blocks.splice(j, 1);
+}
+function setBuildBlocks(list) {
+  for (const r of build.blocks.slice()) removeBuildBlock(r);
+  if (!Array.isArray(list)) return;
+  for (const b of list.slice(0, BUILD_MAX)) {
+    if (!Array.isArray(b) || b.length !== 7 || !b.every(v => typeof v === 'number' && Number.isFinite(v))) continue;
+    const [x, y, z, w, h, d] = b;
+    if (Math.abs(x - LX) > 31.5 || Math.abs(z - LZ) > 31.5 || y < 0 || y > 24 || w <= 0 || h <= 0 || d <= 0 || w > 4 || h > 4 || d > 4) continue;
+    addBuildBlock(b);
+  }
+}
+async function loadBuild() {
+  try { if (!db) return; const snap = await db.doc('build/lobby').get(); setBuildBlocks(snap.exists ? snap.data().blocks : []); build.loaded = true; $('#buildCount') && ($('#buildCount').textContent = build.blocks.length); } catch (e) {}
+}
+function saveBuild() {
+  clearTimeout(build.saveT);
+  build.saveT = setTimeout(async () => {
+    if (!db || !ownerMode) return;
+    try {
+      await db.doc('build/lobby').set({ blocks: build.blocks.map(r => r.b), at: Date.now() });
+      if (lobby.room) lobby.room.emit('admin', { a: 'buildrev', to: '*' }).catch(() => {});
+    } catch (e) { setBanner('NOT SAVED', 'Builds could not be saved', 'lose'); S.bannerFade = 2; }
+  }, 700);
+}
+function toggleBuild(on) {
+  build.on = on === undefined ? !build.on : on;
+  if (build.on && (!ownerMode || S.mode !== 'lobby')) build.on = false;
+  $('#buildBar').hidden = !build.on;
+  if (build.ghost) build.ghost.visible = false;
+  if (build.on) { mouse.l = false; aiming = false; renderBuildBar(); setBanner('BUILD MODE', 'Click to place · right-click to delete', ''); S.bannerFade = 1.6; }
+  lastSlots = '';
+}
+function renderBuildBar() {
+  const bar = $('#buildBar'); if (!bar) return;
+  bar.innerHTML = `<b>BUILD</b><span class="bshape">${BUILD_SHAPES[build.shape].name}${build.rot ? ' ↻' : ''} <kbd>Tab</kbd> <kbd>R</kbd></span>`
+    + `<span class="bcols">${BUILD_COLORS.map((c, i) => `<i class="${i === build.color ? 'on' : ''}" style="background:#${c.toString(16).padStart(6, '0')}"><kbd>${i + 1}</kbd></i>`).join('')}</span>`
+    + `<span class="bhelp">Click place · Right-click delete · <kbd>N</kbd> exit · <span id="buildCount">${build.blocks.length}</span>/${BUILD_MAX}</span>`;
+}
+// first box (or the floor) along a ray, with the face it hit
+function rayHit(o, d, maxT) {
+  let best = maxT, hit = null;
+  for (const b of boxes) { const t = rayAABB(o, d, b.min, b.max); if (t < best) { best = t; hit = b; } }
+  let n = null;
+  if (d.y < 0) { const t = -o.y / d.y; if (t < best) { best = t; hit = null; n = new V3(0, 1, 0); } }
+  if (best >= maxT) return null;
+  const p = o.clone().addScaledVector(d, best);
+  if (hit) { const e = 0.02; n = new V3(); if (Math.abs(p.x - hit.min.x) < e) n.x = -1; else if (Math.abs(p.x - hit.max.x) < e) n.x = 1; else if (Math.abs(p.y - hit.min.y) < e) n.y = -1; else if (Math.abs(p.y - hit.max.y) < e) n.y = 1; else if (Math.abs(p.z - hit.min.z) < e) n.z = -1; else n.z = 1; }
+  return { p, n, box: hit, t: best };
+}
+const snap = (v, g) => Math.round(v / g) * g;
+function updateBuild() {
+  if (!build.on) { if (build.ghost) build.ghost.visible = false; return; }
+  if (S.mode !== 'lobby' || !ownerMode) { toggleBuild(false); return; }
+  if (!build.ghost) {
+    build.ghost = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false }));
+    build.ghost.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: 0xffffff })));
+    scene.add(build.ghost);
+  }
+  const eye = eyeOf(player), dir = dirOf(player.yaw, player.pitch), h = rayHit(eye, dir, 14);
+  build.target = null; build.del = null;
+  if (!h) { build.ghost.visible = false; return; }
+  build.del = h.box && h.box.build ? h.box.build : null;
+  const [w, hh, d] = buildSize();
+  const c = h.p.clone().add(new V3(h.n.x * w / 2, h.n.y * hh / 2, h.n.z * d / 2));
+  const x = snap(c.x - w / 2, 0.5) + w / 2, z = snap(c.z - d / 2, 0.5) + d / 2, y = Math.max(0, snap(c.y - hh / 2, 0.5));
+  const min = new V3(x - w / 2, y, z - d / 2), max = new V3(x + w / 2, y + hh, z + d / 2);
+  const inLobby = Math.abs(x - LX) <= 31.5 - w / 2 && Math.abs(z - LZ) <= 31.5 - d / 2 && y + hh <= 24;
+  const blocked = boxes.some(b => min.x < b.max.x - 1e-3 && max.x > b.min.x + 1e-3 && min.y < b.max.y - 1e-3 && max.y > b.min.y + 1e-3 && min.z < b.max.z - 1e-3 && max.z > b.min.z + 1e-3)
+    || overlaps(player.pos, { min, max }, hOf(player));
+  const ok = inLobby && !blocked && build.blocks.length < BUILD_MAX;
+  build.ghost.visible = true; build.ghost.position.set(x, y + hh / 2, z); build.ghost.scale.set(w, hh, d);
+  build.ghost.material.color.setHex(ok ? BUILD_COLORS[build.color] : 0xff3b4e);
+  if (ok) build.target = [+x.toFixed(2), +y.toFixed(2), +z.toFixed(2), w, hh, d, build.color];
+}
+function buildClick(button) {
+  if (button === 0 && build.target) { addBuildBlock(build.target); sfx('dash', 0.5); }
+  else if (button === 2 && build.del) { const r = build.del; burst(r.m.position.clone(), [BUILD_COLORS[r.b[6]], 0xffffff], 12, 4, 0.1, 0.4); removeBuildBlock(r); sfx('hit', 0.6); }
+  else return;
+  $('#buildCount') && ($('#buildCount').textContent = build.blocks.length);
+  saveBuild();
+}
+function buildKey(e) {
+  if (!build.on) return false;
+  if (/^Digit[1-8]$/.test(e.code)) { build.color = +e.code.slice(5) - 1; renderBuildBar(); return true; }
+  if (e.code === 'Tab') { e.preventDefault(); build.shape = (build.shape + 1) % BUILD_SHAPES.length; renderBuildBar(); return true; }
+  if (e.code === 'KeyR') { build.rot = !build.rot; renderBuildBar(); return true; }
+  return false;
+}
+
 /* ---------- Owner admin panel ---------- */
 const adm = { aim: false, god: false, ammo: false, fly: false, jump: false, oneshot: false, freezeBot: false, night: false, speed: 1 };
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -4580,6 +4701,11 @@ function renderAdmin() {
       </div>
       <label class="admrange" for="admSpeed"><span>Move speed <b id="admSpeedVal">${adm.speed.toFixed(1)}×</b></span><input id="admSpeed" type="range" min="0.5" max="3" step="0.1" value="${adm.speed}"></label>
       <div class="admrow"><button type="button" class="admb" data-act="heal">Full heal</button><button type="button" class="admb" data-act="unlock">Unlock every weapon and skin</button></div>
+    </section>
+    <section class="admsec"><h2>Build</h2>
+      <div class="admrow"><button type="button" class="admb ${build.on ? 'on' : ''}" data-act="build" ${S.mode === 'lobby' ? '' : 'disabled'}>${build.on ? 'Stop building' : 'Start building'} (N)</button>
+        <button type="button" class="admb" data-act="buildclear" ${build.blocks.length ? '' : 'disabled'}>${build.clearArm ? 'Click again to delete every block' : 'Clear all builds'}</button></div>
+      <p class="admnote">${S.mode === 'lobby' ? `Build in the lobby: aim and click to place, right-click a block to delete it, 1–8 colour, Tab shape, R rotate. ${build.blocks.length}/${BUILD_MAX} blocks, saved for everyone.` : 'Building works in the lobby.'}</p>
     </section>
     <section class="admsec"><h2>Teleport</h2>
       ${lob ? `<div class="admrow">${TELEPORTS.map((t, i) => `<button type="button" class="admb" data-tp="${i}">${t[0]}</button>`).join('')}</div>` : '<p class="admnote">Teleports work in the lobby.</p>'}
@@ -4650,6 +4776,8 @@ $('#adminBody').addEventListener('click', e => {
     closeAdmin(); return;
   }
   const act = b.dataset.act;
+  if (act === 'build') { closeAdmin(); toggleBuild(); return; }
+  if (act === 'buildclear') { if (!build.clearArm) { build.clearArm = true; renderAdmin(); setTimeout(() => { build.clearArm = false; }, 4000); return; } build.clearArm = false; setBuildBlocks([]); saveBuild(); renderAdmin(); return; }
   if (act === 'heal') { player.hp = 100; player.burnT = 0; $('#admMsg') && ($('#admMsg').textContent = 'Healed.'); }
   if (act === 'unlock') { Object.keys(W).forEach(k => owned.add(k)); Object.keys(W).filter(canSkin).forEach(k => Object.keys(SKINS).forEach(sk => skinsOwned.add(k + ':' + sk))); save(); renderLoadout(); $('#admMsg').textContent = 'Everything unlocked.'; }
   if (act === 'killbot' && S.mode === 'live' && bot.alive) { closeAdmin(); damage(bot, 999, player, false, eyeOf(bot)); return; }
@@ -4692,6 +4820,7 @@ function onNetAdmin(msg) {
   if (d.to !== '*' && d.to !== lobby.myPeer) return;
   if (d.a === 'gift') { receiveGift(d.g, d.from); return; }
   if (d.a === 'weather') { setWeather(d.w); return; }
+  if (d.a === 'buildrev') { if (!ownerMode) loadBuild(); return; }
   if (d.a === 'enargade') {
     if (ownerMode) return;
     const first = !enargadeEarned; enargadeEarned = true; save();
@@ -4729,7 +4858,7 @@ $('#playBtn').addEventListener('click', () => { if (!myName) openNamer(true); el
 $('#againBtn').addEventListener('click', () => { if (S.lastPvp) { enterLobby(); const t = PADS.pvp; player.pos.set(t.x, 0, t.z); } else startBotMatch(); });
 $('#menuBtn').addEventListener('click', enterLobby);
 $('#resumeBtn').addEventListener('click', resume);
-$('#quitBtn').addEventListener('click', () => { endPvp(); S.paused = false; S.mode = 'menu'; S.inShop = false; player.inZone = false; clearProjectiles(); setNetMode('menu'); $('#padTip').hidden = true; $('#pause').hidden = true; $('#hud').hidden = true; $('#menu').hidden = false; menuPose(); });
+$('#quitBtn').addEventListener('click', () => { endPvp(); toggleBuild(false); S.paused = false; S.mode = 'menu'; S.inShop = false; player.inZone = false; clearProjectiles(); setNetMode('menu'); $('#padTip').hidden = true; $('#pause').hidden = true; $('#hud').hidden = true; $('#menu').hidden = false; menuPose(); });
 
 bot.loadout = ['rifle', 'pistol', 'knife', 'grenade'];
 menuPose();
