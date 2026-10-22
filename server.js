@@ -49,6 +49,12 @@ const server = http.createServer((req, res) => {
   if (!file.startsWith(PUBLIC)) { res.writeHead(403); res.end(); return; }
   fs.readFile(file, (err, buf) => {
     if (err) { res.writeHead(404, { 'content-type': 'text/plain' }); res.end('Not found'); return; }
+    if (file.endsWith('index.html')) {
+      // link previews (Discord, iMessage...) need the full address of the thumbnail
+      const proto = (req.headers['x-forwarded-proto'] || 'http').split(',')[0].trim();
+      const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').replace(/[^A-Za-z0-9.:\-]/g, '');
+      buf = Buffer.from(buf.toString('utf8').split('__ORIGIN__').join(proto + '://' + host), 'utf8');
+    }
     res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
     res.end(buf);
   });
