@@ -1651,6 +1651,8 @@ function syncPeers() {
     if (!r) { r = makeRemote(p.peer, nm); lobby.remotes.set(p.peer, r); r.pos.set(num(pr.x, LX), num(pr.y), num(pr.z, LZ)); }
     else if (r.name !== nm || r.vip !== (pr.vp === 1) || r.ws !== (Number.isInteger(pr.ws) ? Math.min(pr.ws, 999) : 0)) { r.vip = pr.vp === 1; r.ws = Number.isInteger(pr.ws) ? Math.min(pr.ws, 999) : 0; setRemoteName(r, nm); }
     r.tgt.set(num(pr.x, LX), num(pr.y), num(pr.z, LZ));
+    r.offMap = Math.abs(r.tgt.x - LX) > 34 || Math.abs(r.tgt.z - LZ) > 34;
+    r.mesh.visible = S.mode === 'lobby' && !r.offMap && !pr.dd;
     r.tyaw = num(pr.yw); r.pitch = clamp(num(pr.pt), -1.6, 1.6); r.ck = clamp(num(pr.ck), 0, 1);
     r.hp = clamp(num(pr.hp, 100), 0, 100); r.alive = !pr.dd; r.inZone = !!pr.zn;
     const em = Number.isInteger(pr.em) && pr.em >= 0 && pr.em < EMOTES.length ? pr.em : -1;
@@ -1660,6 +1662,12 @@ function syncPeers() {
   lobby.others = here;
 }
 // smooth a real player's body toward their latest network state and animate walking or emoting
+// height of the floor or box top under (x, z) that a body at pos.y could be standing on
+function groundUnder(pos, reach) {
+  let g = 0;
+  for (const b of boxes) if (pos.x + 0.2 > b.min.x && pos.x - 0.2 < b.max.x && pos.z + 0.2 > b.min.z && pos.z - 0.2 < b.max.z && b.max.y <= pos.y + reach && b.max.y > g) g = b.max.y;
+  return g;
+}
 function animRemote(r, dt, k) {
   r.prev.copy(r.pos);
   if (r.pos.distanceTo(r.tgt) > 6) r.pos.copy(r.tgt); else r.pos.lerp(r.tgt, k);
@@ -1668,6 +1676,7 @@ function animRemote(r, dt, k) {
   r.walk += spd * dt * 1.7;
   const u = r.mesh.userData, sw = Math.sin(r.walk) * 0.7 * Math.min(1, spd / 4);
   r.mesh.position.copy(r.pos);
+  r.mesh.position.y = Math.max(r.pos.y, groundUnder(r.pos, 0.6));
   if (r.em >= 0 && r.alive) {
     r.emT = (r.emT || 0) + dt;
     const o = poseEmote(r.mesh, r.em, r.emT);
@@ -1855,6 +1864,7 @@ function syncDuelPeer(p) {
   const pr = p.presence || {};
   if (pr.md !== 'duel' || pr.dv !== S.pvp.id) return;
   S.pvp.seen = performance.now();
+  if (S.pvp.side === 1 && typeof pr.dmap === 'string' && MAPS[pr.dmap] && pr.dmap !== S.pvp.map) { S.pvp.map = S.map = pr.dmap; useMap(pr.dmap); }
   const r = duelOpp;
   r.tgt.set(num(pr.x), num(pr.y), num(pr.z));
   r.tyaw = num(pr.yw); r.pitch = clamp(num(pr.pt), -1.6, 1.6); r.ck = clamp(num(pr.ck), 0, 1);
@@ -1966,7 +1976,7 @@ function updateLobby(dt) {
   const k = 1 - Math.exp(-14 * dt);
   for (const r of lobby.remotes.values()) {
     animRemote(r, dt, k);
-    r.mesh.visible = r.alive;
+    r.mesh.visible = r.alive && !r.offMap;
     const hostile = r.inZone && p.inZone;
     for (const o of r.outlines) o.visible = hostile;
   }
