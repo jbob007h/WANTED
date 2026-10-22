@@ -102,7 +102,17 @@
     onPeers(fn) { peerH.push(fn); setTimeout(() => { try { fn({ peers: snapshot(), joined: snapshot(), left: [], updated: [] }); } catch (e) {} }, 0); return () => { const i = peerH.indexOf(fn); if (i >= 0) peerH.splice(i, 1); }; },
     connected: () => connected
   };
+  // a small query builder: collection('lb').orderBy(field, 'desc').limit(n).get()
+  const query = (path, order, n) => ({
+    orderBy: (f) => query(path, f, n), limit: (k) => query(path, order, k), where: () => query(path, order, n),
+    doc: id => db.doc(path + '/' + id),
+    get: () => request({ t: 'db', op: 'list', path, orderBy: order, limit: n }).then(r => {
+      const docs = (r.docs || []).map(d => ({ id: d.id, exists: true, data: () => d.data, metadata: { fromCache: false, hasPendingWrites: false } }));
+      return { docs, size: docs.length, empty: !docs.length, docChanges: () => [], metadata: { fromCache: false, hasPendingWrites: false } };
+    })
+  });
   const db = {
+    collection: path => query(path, null, 50),
     doc(path) {
       const id = String(path).split('/').pop();
       return {

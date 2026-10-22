@@ -33,6 +33,7 @@ function dbAllowed(client, op, p) {
   const parts = p.split('/');
   if (parts.length % 2 !== 0) return false;                  // documents only
   if (parts[0] === 'names' && parts.length === 2) return true;
+  if (parts[0] === 'lb' && parts.length === 2) return op === 'get' || parts[1] === client.uid; // leaderboard: read anyone, write only your own row
   if (parts[0] === 'data' && parts[1] === 'users') return parts[2] === client.uid; // your own data only
   return false;
 }
@@ -158,6 +159,15 @@ function onMessage(c, text) {
     if (m.rid) send(c, { t: 'ack', rid: m.rid, ok: true });
     return;
   }
+  // leaderboard list: every row in 'lb', best first, at most 100
+  if (m.t === 'db' && m.op === 'list' && m.path === 'lb') {
+    const field = ['bs', 'keys', 'kills', 'ws'].includes(m.orderBy) ? m.orderBy : 'bs';
+    const n = Math.max(1, Math.min(100, +m.limit || 50));
+    const docs = Object.keys(store).filter(k => k.startsWith('lb/')).map(k => ({ id: k.slice(3), data: store[k] }))
+      .sort((a, b) => (Number(b.data[field]) || 0) - (Number(a.data[field]) || 0)).slice(0, n);
+    send(c, { t: 'dbr', rid: m.rid, ok: true, result: { docs } });
+    return;
+  }
   if (m.t === 'db' && typeof m.path === 'string' && PATH_RE.test(m.path)) {
     const reply = (ok, result) => send(c, { t: 'dbr', rid: m.rid, ok, result });
     if (!dbAllowed(c, m.op, m.path)) { reply(false, { code: 'invalid_argument' }); return; }
@@ -172,6 +182,11 @@ function onMessage(c, text) {
         if (key === OWNER_NAME && !c.admin) { reply(false, { code: 'reserved' }); return; }
         if (!NAME_RE.test(String(m.data.name || '')) || String(m.data.name).toLowerCase() !== key) { reply(false, { code: 'invalid_argument' }); return; }
         store[p] = { uid: c.uid, name: m.data.name, at: Date.now() };
+      } else if (p.startsWith('lb/')) {
+        // keep only the leaderboard fields; the server decides who is the owner
+        const d = m.data, int = v => Math.max(0, Math.min(1e9, Math.floor(Number(v) || 0)));
+        if (!NAME_RE.test(String(d.nm || ''))) { reply(false, { code: 'invalid_argument' }); return; }
+        store[p] = { nm: String(d.nm), ws: int(d.ws), bs: int(d.bs), keys: c.admin ? 0 : int(d.keys), kills: int(d.kills), o: c.admin ? 1 : 0, at: Date.now() };
       } else store[p] = m.data;
       persist(); reply(true, {}); return;
     }
