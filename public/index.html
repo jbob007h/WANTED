@@ -483,6 +483,10 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
 #xprev .dot { width: 2px; height: 2px; left: -1px; top: -1px; border-radius: 50%; }
 @media (max-width: 520px) { .srow { grid-template-columns: 1fr 48px; } .srow > span:first-child { grid-column: 1 / -1; } }
 .setbtn { background: linear-gradient(180deg, #ffffff, #d7e3ff); }
+#wxTint { position: fixed; inset: 0; z-index: 2; pointer-events: none; transition: background 1.2s ease; }
+#wxFlash { position: fixed; inset: 0; z-index: 3; pointer-events: none; background: #eef3ff; opacity: 0; }
+#wxBadge { position: fixed; top: 10px; right: 12px; z-index: 35; pointer-events: none; font: 14px var(--display); letter-spacing: .05em; color: #fff; background: rgba(11,22,48,.7); border: 2px solid var(--ink); border-radius: 8px; padding: 3px 10px; }
+@media (prefers-reduced-motion: reduce) { #wxFlash { display: none; } }
 #fps { position: fixed; top: 10px; left: 12px; z-index: 35; pointer-events: none; font: 14px var(--display); color: #fff; text-shadow: 0 2px 0 var(--ink); }
 #emoteWheel { position: fixed; left: 50%; top: 50%; width: 320px; height: 320px; margin: -160px 0 0 -160px; z-index: 30; pointer-events: none; border-radius: 50%;
   background: radial-gradient(circle, transparent 0 25%, rgba(11,22,48,.62) 26% 100%); border: 3px solid var(--ink); box-shadow: 0 10px 40px rgba(0,0,0,.35); }
@@ -524,6 +528,8 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
 .admlist li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; background: rgba(255,255,255,.06); border-radius: 10px; padding: 6px 10px; }
 .admlist .nm { font: 17px var(--display); min-width: 0; overflow-wrap: anywhere; }
 .admlist .st { color: var(--muted); font-size: 13px; margin-right: auto; }
+.admsub { margin: 10px 0 4px; font: 14px var(--display); letter-spacing: .08em; color: var(--muted); }
+.wxrow .admb.on { background: var(--gold); color: var(--ink); }
 .gift { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; align-items: end; }
 .gift label { display: grid; gap: 4px; } .gift label[hidden] { display: none; } .gift label span { color: var(--muted); font-size: 13px; }
 .gift select, .gift input { min-width: 0; font: 15px var(--body); font-weight: 600; border: 3px solid var(--ink); border-radius: 10px; padding: 7px 8px; background: #fff; color: var(--ink); }
@@ -682,6 +688,9 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
   <div class="vinfo"><span class="vname" id="vicName">YOU</span><span class="vscore" id="vicScore">5 – 0</span><span class="vstreak" id="vicStreak" hidden></span></div>
 </div>
 
+<div id="wxTint" aria-hidden="true"></div>
+<div id="wxFlash" aria-hidden="true"></div>
+<div id="wxBadge" hidden></div>
 <div id="fps" hidden></div>
 <div id="emoteWheel" hidden aria-label="Emote wheel"></div>
 <div id="announce" role="status" aria-live="assertive" hidden><div class="al">ANNOUNCEMENT</div><div class="at"></div></div>
@@ -1648,6 +1657,7 @@ function syncPeers() {
     if (p.isMe || p.kind !== 'viewer') continue;
     if (S.pvp && duelOpp && p.peer === S.pvp.opp) { syncDuelPeer(p); continue; }
     const pr = p.presence || {};
+    if (!ownerMode && typeof pr.wx === 'string' && pr.nm === OWNER_NAME && pr.wx !== wx.kind) setWeather(pr.wx, true);
     if (pr.md !== 'lobby') continue;
     here++; seen.add(p.peer);
     const nm = typeof pr.nm === 'string' && NAME_RE.test(pr.nm) ? pr.nm : 'Player';
@@ -1998,7 +2008,7 @@ function updateLobby(dt) {
   if (lobby.room && lobby.sendT <= 0) {
     lobby.sendT = lobby.queued ? 0.25 : 0.08;
     lobby.room.presence({ md: 'lobby', nm: myName || 'Player', x: +p.pos.x.toFixed(2), y: +p.pos.y.toFixed(2), z: +p.pos.z.toFixed(2),
-      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1, vp: passes.has('vip') ? 1 : 0, ws: streak, q: lobby.queued ? 1 : 0, ch: lobby.queued ? lobby.challenge || null : null, mp: mapPick }).catch(() => {});
+      yw: +(emo.cur >= 0 ? emo.yaw : p.yaw).toFixed(3), em: emo.cur, pt: +p.pitch.toFixed(3), ck: +p.ck.toFixed(2), hp: Math.ceil(p.hp), zn: p.inZone ? 1 : 0, dd: p.alive ? 0 : 1, vp: passes.has('vip') ? 1 : 0, ws: streak, ...(ownerMode ? { wx: wx.kind } : {}), q: lobby.queued ? 1 : 0, ch: lobby.queued ? lobby.challenge || null : null, mp: mapPick }).catch(() => {});
   }
   if (lobby.flushT <= 0) { lobby.flushT = 0.12; if (lobby.pending.size) flushHits(); }
   // HUD
@@ -3854,6 +3864,7 @@ function frame(now) {
   }
   tickSkins(rdt, now);
   tickPreview(rdt);
+  updateWeather(rdt);
   updateFx(dt);
   updateCamera(dt);
   if (S.mode !== 'menu' && S.mode !== 'victory') updateHud(dt);
@@ -4354,6 +4365,159 @@ const sl = $('#sens'); sl.value = sens; $('#sensVal').textContent = sens.toFixed
 sl.addEventListener('input', () => { sens = +sl.value; $('#sensVal').textContent = sens.toFixed(1); save(); });
 if (matchMedia('(pointer: coarse)').matches) $('#touchNote').hidden = false;
 
+/* ---------- Weather (set by the owner, shared with everyone) ---------- */
+// Each weather has its own look and drops pickups from the sky. In the lobby and menu a pickup
+// gives keys; in a match it heals you and refills your ammo instead.
+const WEATHERS = {
+  clear:    { name: 'Clear', every: 0 },
+  rain:     { name: 'Rain', every: 8, drop: 'pouch', tint: 'rgba(40,60,90,.18)', fog: [40, 110] },
+  snow:     { name: 'Snow', every: 7, drop: 'crystal', tint: 'rgba(220,235,255,.12)', fog: [30, 95] },
+  storm:    { name: 'Thunderstorm', every: 11, drop: 'shard', tint: 'rgba(10,15,35,.38)', fog: [30, 90] },
+  fog:      { name: 'Fog', every: 9, drop: 'mystery', tint: 'rgba(200,205,215,.22)', fog: [6, 38] },
+  keystorm: { name: 'Key Storm', every: 1.6, drop: 'key', tint: 'rgba(255,200,40,.1)', fog: [50, 130] }
+};
+const DROPS = {
+  pouch:   { name: 'Key pouch', keys: 5, color: 0xffd23f },
+  crystal: { name: 'Snow crystal', keys: 3, color: 0x9fe8ff },
+  shard:   { name: 'Storm shard', keys: 15, color: 0xb98cff },
+  mystery: { name: 'Mystery box', keys: 0, color: 0xff4fd8 },
+  key:     { name: 'Falling key', keys: 10, color: 0xffd23f }
+};
+const wx = { kind: 'clear', parts: null, partKind: '', spawnT: 3, drops: [], boltT: 6, flash: 0, amb: null, baseFog: null };
+function setWeather(kind, quiet) {
+  if (!WEATHERS[kind]) kind = 'clear';
+  if (kind === wx.kind && wx.partKind === kind) return;
+  wx.kind = kind;
+  const W8 = WEATHERS[kind];
+  if (!wx.baseFog) wx.baseFog = [scene.fog.near, scene.fog.far];
+  scene.fog.near = W8.fog ? W8.fog[0] : wx.baseFog[0]; scene.fog.far = W8.fog ? W8.fog[1] : wx.baseFog[1];
+  $('#wxTint').style.background = W8.tint || 'transparent';
+  buildParticles(kind);
+  weatherSound(kind);
+  wx.spawnT = 2; wx.boltT = rand(3, 6);
+  if (kind === 'clear') { for (const d of wx.drops) scene.remove(d.g); wx.drops.length = 0; }
+  if (!quiet && S.mode !== 'menu') { setBanner(W8.name.toUpperCase(), kind === 'clear' ? 'The sky clears' : 'Grab what falls from the sky!', ''); S.bannerFade = 2.2; }
+  const b = $('#wxBadge'); b.hidden = kind === 'clear'; b.textContent = kind === 'clear' ? '' : '☁ ' + W8.name;
+}
+function buildParticles(kind) {
+  if (wx.parts) { camera.remove(wx.parts); scene.remove(wx.parts); wx.parts = null; }
+  wx.partKind = kind;
+  if (kind === 'clear' || kind === 'fog') return;
+  const rainy = kind === 'rain' || kind === 'storm', n = rainy ? (kind === 'storm' ? 1400 : 900) : kind === 'snow' ? 800 : 260;
+  const pos = new Float32Array(n * (rainy ? 6 : 3));
+  const seeds = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { seeds[i * 4] = rand(-26, 26); seeds[i * 4 + 1] = rand(-4, 22); seeds[i * 4 + 2] = rand(-26, 26); seeds[i * 4 + 3] = Math.random(); }
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const obj = rainy ? new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: kind === 'storm' ? 0x9fb4d8 : 0xbcd4ff, transparent: true, opacity: 0.55 }))
+    : new THREE.Points(geo, new THREE.PointsMaterial({ color: kind === 'snow' ? 0xffffff : 0xffd23f, size: kind === 'snow' ? 0.16 : 0.32, transparent: true, opacity: 0.95, depthWrite: false }));
+  obj.frustumCulled = false; obj.userData = { seeds, rainy, n }; scene.add(obj); wx.parts = obj;
+}
+function weatherSound(kind) {
+  if (wx.amb) { try { wx.amb.g.gain.setTargetAtTime(0, ac.currentTime, 0.4); const a = wx.amb; setTimeout(() => { try { a.src.stop(); } catch (e) {} }, 1500); } catch (e) {} wx.amb = null; }
+  if (!ac || !master || !(kind === 'rain' || kind === 'storm')) return;
+  const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  src.buffer = noise; src.loop = true; f.type = 'bandpass'; f.frequency.value = kind === 'storm' ? 900 : 1600; f.Q.value = 0.6;
+  g.gain.value = 0; g.gain.setTargetAtTime(kind === 'storm' ? 0.1 : 0.06, ac.currentTime, 0.8);
+  src.connect(f); f.connect(g); g.connect(master); src.start(); wx.amb = { src, g };
+}
+function makeDropMesh(type) {
+  const D = DROPS[type], g = new THREE.Group();
+  if (type === 'mystery') {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.55, 0.55), plastic(0x9b3bff)); g.add(box);
+    const band = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.12, 0.58), basic(0xffd23f)); g.add(band);
+    const band2 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, 0.58), basic(0xffd23f)); g.add(band2);
+  } else if (type === 'pouch' || type === 'key') {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.05, 8, 18), basic(0xffd23f)); ring.position.y = 0.18; g.add(ring);
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.36, 0.07), basic(0xffd23f)); shaft.position.y = -0.12; g.add(shaft);
+    const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.06, 0.07), basic(0xffd23f)); tooth.position.set(0.07, -0.24, 0); g.add(tooth);
+    if (type === 'pouch') { const bag = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), plastic(0x8a5a2b)); bag.position.y = -0.05; g.add(bag); ring.position.y = 0.26; }
+  } else {
+    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.28), new THREE.MeshPhongMaterial({ color: D.color, emissive: D.color, emissiveIntensity: 0.45, shininess: 120, transparent: true, opacity: 0.92 }));
+    gem.scale.y = 1.5; g.add(gem);
+  }
+  const glow = new THREE.Mesh(new THREE.CircleGeometry(0.75, 24), new THREE.MeshBasicMaterial({ color: D.color, transparent: true, opacity: 0.35, depthWrite: false }));
+  glow.rotation.x = -Math.PI / 2; glow.userData.ground = true; g.add(glow);
+  return g;
+}
+function spawnDrop(type, at) {
+  const p = player.pos; let x, z, ok = false;
+  for (let n = 0; n < 14 && !ok; n++) {
+    if (at) { x = at.x; z = at.z; } else { const a = rand(0, Math.PI * 2), r = rand(3, 13); x = p.x + Math.cos(a) * r; z = p.z + Math.sin(a) * r; }
+    ok = !insideAny(new V3(x, 0.9, z), 0.6) || !!at; at = null;
+  }
+  if (!ok) return;
+  const g = makeDropMesh(type); const ground = groundUnder(new V3(x, 30, z), 40);
+  g.position.set(x, ground + 14, z); scene.add(g);
+  wx.drops.push({ g, type, ground, vy: 0, life: 40, phase: Math.random() * 6 });
+  if (wx.drops.length > 6) { const old = wx.drops.shift(); scene.remove(old.g); }
+}
+function collectDrop(d) {
+  const D = DROPS[d.type];
+  burst(d.g.position.clone(), [D.color, 0xffffff], 18, 5, 0.1, 0.6); sfx('buy');
+  const inMatch = S.mode === 'live' || S.mode === 'countdown' || S.mode === 'roundEnd';
+  if (inMatch) {
+    player.hp = Math.min(100, player.hp + 25); refillLoadout(player); S.healFx = 1; lastSlots = '';
+    addFeed(`<span class="hs">${D.name}: +25 HP and full ammo</span>`); return;
+  }
+  let msg = '';
+  if (d.type === 'mystery') {
+    const r = Math.random();
+    const skinPool = Object.keys(SKINS).filter(k => !SKINS[k].owner && k !== 'default');
+    const ws = [...owned].filter(canSkin), w = ws[(Math.random() * ws.length) | 0], sk = skinPool[(Math.random() * skinPool.length) | 0];
+    if (r < 0.2 && w && !skinsOwned.has(w + ':' + sk)) { skinsOwned.add(w + ':' + sk); msg = `the ${SKINS[sk].name} skin for your ${W[w].name}!`; showAnnouncement(`Mystery box: ${SKINS[sk].name} skin for your ${W[w].name}!`, '🎁 MYSTERY BOX'); }
+    else { const k = r > 0.95 ? 100 : r > 0.6 ? 30 : 15; wallet += k; msg = `+${k} keys`; }
+  } else { wallet += D.keys; msg = `+${D.keys} keys`; }
+  save(); renderWallet();
+  addFeed(`<span class="hs">${D.name}: ${msg}</span>`);
+}
+function lightning() {
+  wx.flash = 1;
+  const p = player.pos, a = rand(0, Math.PI * 2), r = rand(6, 16), at = new V3(p.x + Math.cos(a) * r, 0, p.z + Math.sin(a) * r);
+  // a jagged bolt from the clouds to the ground, then a storm shard where it hit
+  const pts = []; let x = at.x, z = at.z; for (let y = 40; y >= 0; y -= 4) { pts.push(new V3(x, y, z)); x += rand(-1.2, 1.2); z += rand(-1.2, 1.2); }
+  pts[pts.length - 1].set(at.x, groundUnder(new V3(at.x, 30, at.z), 40), at.z);
+  const bolt = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: 0xf0f4ff, transparent: true, opacity: 1 }));
+  scene.add(bolt); fx.push({ m: bolt, life: 0.25, max: 0.25, line: true });
+  ring(pts[pts.length - 1], 3);
+  if (ac && master) { const t0 = rand(0.15, 0.7); nz(1.8, 'lowpass', 180, 0.6, t0); nz(0.4, 'lowpass', 900, 0.35, t0); }
+  if (Math.random() < 0.6) spawnDrop('shard', at);
+}
+function updateWeather(dt) {
+  const k = wx.kind;
+  // particles follow the camera so the weather is everywhere you look
+  if (wx.parts) {
+    const o = wx.parts, { seeds, rainy, n } = o.userData, arr = o.geometry.attributes.position.array, c = camera.position, t = performance.now() / 1000;
+    const fall = rainy ? (k === 'storm' ? 34 : 26) : k === 'snow' ? 1.6 : 4.5;
+    for (let i = 0; i < n; i++) {
+      let y = seeds[i * 4 + 1] - fall * dt * (0.7 + seeds[i * 4 + 3] * 0.6);
+      if (y < -4) { y = 22; seeds[i * 4] = rand(-26, 26); seeds[i * 4 + 2] = rand(-26, 26); }
+      seeds[i * 4 + 1] = y;
+      let x = seeds[i * 4], z = seeds[i * 4 + 2];
+      if (!rainy) { x += Math.sin(t * 0.8 + i) * 0.6; z += Math.cos(t * 0.7 + i * 1.3) * 0.6; }
+      const wxp = c.x + x, wy = c.y + y, wz = c.z + z;
+      if (rainy) { const j = i * 6, sl = k === 'storm' ? 0.18 : 0.08; arr[j] = wxp; arr[j + 1] = wy; arr[j + 2] = wz; arr[j + 3] = wxp - sl; arr[j + 4] = wy - 0.7; arr[j + 5] = wz; }
+      else { const j = i * 3; arr[j] = wxp; arr[j + 1] = wy; arr[j + 2] = wz; }
+    }
+    o.geometry.attributes.position.needsUpdate = true;
+  }
+  // lightning
+  if (k === 'storm') { wx.boltT -= dt; if (wx.boltT <= 0) { wx.boltT = rand(4, 10); lightning(); } }
+  wx.flash = Math.max(0, wx.flash - dt * 3.5);
+  $('#wxFlash').style.opacity = (wx.flash > 0 ? (wx.flash > 0.6 ? 0.85 : wx.flash * 0.6) : 0).toFixed(2);
+  // drops
+  const can = player.alive && (S.mode === 'lobby' || S.mode === 'live' || S.mode === 'countdown');
+  if (WEATHERS[k].every && can) { wx.spawnT -= dt; if (wx.spawnT <= 0) { wx.spawnT = WEATHERS[k].every * rand(0.7, 1.3); spawnDrop(WEATHERS[k].drop); } }
+  for (let i = wx.drops.length - 1; i >= 0; i--) {
+    const d = wx.drops[i], g = d.g; d.life -= dt; d.phase += dt;
+    if (g.position.y > d.ground + 0.6) { d.vy = Math.max(d.vy - 14 * dt, -16); g.position.y = Math.max(d.ground + 0.6, g.position.y + d.vy * dt); if (g.position.y <= d.ground + 0.6) burst(g.position.clone(), [DROPS[d.type].color], 8, 3, 0.07, 0.4); }
+    else g.position.y = d.ground + 0.6 + Math.sin(d.phase * 2.5) * 0.12;
+    g.rotation.y += dt * 2;
+    g.children.forEach(ch => { if (ch.userData.ground) { ch.position.y = d.ground + 0.03 - g.position.y; ch.rotation.z = -g.rotation.y; } });
+    const near = can && Math.hypot(player.pos.x - g.position.x, player.pos.z - g.position.z) < 1.3 && Math.abs(player.pos.y + 0.6 - g.position.y) < 1.6;
+    if (near || d.life <= 0) { scene.remove(g); wx.drops.splice(i, 1); if (near) collectDrop(d); }
+  }
+}
+
 /* ---------- Owner admin panel ---------- */
 const adm = { aim: false, god: false, ammo: false, fly: false, jump: false, oneshot: false, freezeBot: false, night: false, speed: 1 };
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -4427,7 +4591,9 @@ function renderAdmin() {
     </section>
     <section class="admsec"><h2>World</h2>
       <div class="admgrid">${tog('night', 'Night mode', 'Dark sky, dim lights')}</div>
-    </section>
+      <h3 class="admsub">Weather</h3>
+      <div class="admrow wxrow">${Object.entries(WEATHERS).map(([k, w]) => `<button type="button" class="admb ${wx.kind === k ? 'on' : ''}" data-wx="${k}" aria-pressed="${wx.kind === k}">${w.name}</button>`).join('')}</div>
+      <p class="admnote">Weather changes for everyone online. Rain drops key pouches, snow drops crystals, storms leave shards where lightning strikes, fog hides mystery boxes, and Key Storm rains keys. In a match, pickups heal you and refill ammo instead.</p>
     <section class="admsec"><h2>Gift</h2>
       ${!lobby.room ? '<p class="admnote">Gifting needs a signed-in view of the game.</p>' : (() => {
         const online = giftTargets();
@@ -4487,6 +4653,12 @@ $('#adminBody').addEventListener('click', e => {
   if (act === 'heal') { player.hp = 100; player.burnT = 0; $('#admMsg') && ($('#admMsg').textContent = 'Healed.'); }
   if (act === 'unlock') { Object.keys(W).forEach(k => owned.add(k)); Object.keys(W).filter(canSkin).forEach(k => Object.keys(SKINS).forEach(sk => skinsOwned.add(k + ':' + sk))); save(); renderLoadout(); $('#admMsg').textContent = 'Everything unlocked.'; }
   if (act === 'killbot' && S.mode === 'live' && bot.alive) { closeAdmin(); damage(bot, 999, player, false, eyeOf(bot)); return; }
+  if (b.dataset.wx) {
+    setWeather(b.dataset.wx); renderAdmin();
+    if (lobby.room) lobby.room.emit('admin', { a: 'weather', to: '*', w: b.dataset.wx }).catch(() => {});
+    if (S.mode === 'lobby') lobby.sendT = 0;
+    return;
+  }
   if (b.dataset.pa && lobby.room) {
     lobby.room.emit('admin', { a: b.dataset.pa, to: b.dataset.peer }).then(() => { $('#admMsg').textContent = 'Done.'; }).catch(() => { $('#admMsg').textContent = "Couldn't send: your view isn't allowed to broadcast."; });
   }
@@ -4519,6 +4691,7 @@ function onNetAdmin(msg) {
   const d = msg.data; if (!d || typeof d !== 'object' || msg.sameTab) return;
   if (d.to !== '*' && d.to !== lobby.myPeer) return;
   if (d.a === 'gift') { receiveGift(d.g, d.from); return; }
+  if (d.a === 'weather') { setWeather(d.w); return; }
   if (d.a === 'enargade') {
     if (ownerMode) return;
     const first = !enargadeEarned; enargadeEarned = true; save();
