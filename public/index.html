@@ -495,6 +495,20 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
 #splash.out { opacity: 0; pointer-events: none; }
 @keyframes splashIn { from { transform: scale(.85) rotate(-3deg); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { #splash img { animation: none; } }
+#glitchBars { position: fixed; inset: 0; z-index: 4; pointer-events: none; display: none; mix-blend-mode: difference; }
+#glitchBars i { position: absolute; left: -10vw; right: -10vw; background: #fff; opacity: 0; }
+body.glitching #glitchBars { display: block; }
+body.glitching #stage { animation: gTear .18s steps(3) infinite; }
+@keyframes gTear { 0% { transform: translate(0); filter: none; } 33% { transform: translate(-8px, 3px) skewX(2deg); filter: hue-rotate(90deg) saturate(3); } 66% { transform: translate(6px, -2px); filter: invert(.15) contrast(1.6); } 100% { transform: translate(0); } }
+#fakeErr { position: fixed; left: 50%; top: 40%; z-index: 90; width: min(440px, calc(100vw - 32px)); transform: translate(-50%, -50%); background: #f0f0f0; color: #111; border: 1px solid #888; box-shadow: 0 10px 40px rgba(0,0,0,.5); font: 14px 'Segoe UI', system-ui, sans-serif; pointer-events: none; }
+#fakeErr.show { animation: feIn .15s steps(2); }
+@keyframes feIn { from { transform: translate(-48%, -52%); } }
+#fakeErr .fe-bar { display: flex; justify-content: space-between; padding: 6px 10px; background: #fff; border-bottom: 1px solid #ddd; }
+#fakeErr .fe-body { display: flex; gap: 12px; padding: 16px; } #fakeErr .fe-body p { margin: 0; line-height: 1.45; }
+#fakeErr .fe-ico { flex: none; width: 34px; height: 34px; border-radius: 50%; background: #d83b01; color: #fff; display: grid; place-items: center; font: bold 20px system-ui; }
+#fakeErr .fe-btns { display: grid; gap: 6px; padding: 0 16px 16px; } #fakeErr .fe-btns span { border: 1px solid #aaa; background: #fff; padding: 6px 10px; }
+.admb.chaos { background: linear-gradient(90deg, #ff3b4e, #9b6bff); color: #fff; }
+@media (prefers-reduced-motion: reduce) { body.glitching #stage { animation: none; } }
 #wxTint { position: fixed; inset: 0; z-index: 2; pointer-events: none; transition: background 1.2s ease; }
 #wxFlash { position: fixed; inset: 0; z-index: 3; pointer-events: none; background: #eef3ff; opacity: 0; }
 #wxBadge { position: fixed; top: 10px; right: 12px; z-index: 35; pointer-events: none; font: 14px var(--display); letter-spacing: .05em; color: #fff; background: rgba(11,22,48,.7); border: 2px solid var(--ink); border-radius: 8px; padding: 3px 10px; }
@@ -702,6 +716,8 @@ body.aurawin #stage { filter: grayscale(1) contrast(1.6) brightness(.7); }
   <div class="vinfo"><span class="vname" id="vicName">YOU</span><span class="vscore" id="vicScore">5 – 0</span><span class="vstreak" id="vicStreak" hidden></span></div>
 </div>
 
+<div id="glitchBars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<div id="fakeErr" hidden role="alert"><div class="fe-bar"><span>WANTED.exe</span><b>✕</b></div><div class="fe-body"><span class="fe-ico">!</span><p><b>WANTED.exe has stopped responding</b><br>Error 0x0000DEAD: reality.dll could not load the floor.</p></div><div class="fe-btns"><span>Close the program</span><span>Wait for the program to respond</span></div></div>
 <div id="wxTint" aria-hidden="true"></div>
 <div id="wxFlash" aria-hidden="true"></div>
 <div id="wxBadge" hidden></div>
@@ -2058,16 +2074,18 @@ function tryDash(f, dir) {
   return true;
 }
 function moveFighter(f, dt) {
-  f.vel.y -= GRAV * dt;
+  f.vel.y -= GRAV * (f === player ? gMul : 1) * dt;
   const p = f.pos, H = hOf(f);
+  const ghost = f === player && (gl.on.noclip || gl.fallT > 0);   // video glitches: walls and floor stop working
+  const solid = ghost ? [] : boxes;
   const overlaps = (q, b) => overlapsH(q, b, H);
   for (const ax of ['x', 'z']) {
     p[ax] += f.vel[ax] * dt;
-    for (const b of boxes) {
+    for (const b of solid) {
       if (!overlaps(p, b)) continue;
       if ((f.onGround || f.slideT > 0) && b.max.y - p.y <= 0.55 && b.max.y - p.y > 0) {
         const old = p.y; p.y = b.max.y;
-        if (boxes.some(o => o !== b && overlaps(p, o))) p.y = old; else continue;
+        if (solid.some(o => o !== b && overlaps(p, o))) p.y = old; else continue;
       }
       if (f.vel[ax] > 0 || (f.vel[ax] === 0 && p[ax] < (b.min[ax] + b.max[ax]) / 2)) p[ax] = b.min[ax] - R - 0.001;
       else p[ax] = b.max[ax] + R + 0.001;
@@ -2076,12 +2094,12 @@ function moveFighter(f, dt) {
   }
   p.y += f.vel.y * dt;
   f.onGround = false;
-  for (const b of boxes) {
+  for (const b of solid) {
     if (!overlaps(p, b)) continue;
     if (f.vel.y <= 0) { p.y = b.max.y; f.onGround = true; } else p.y = b.min.y - H - 0.001;
     f.vel.y = 0;
   }
-  if (p.y <= 0) { p.y = 0; f.vel.y = 0; f.onGround = true; }
+  if (p.y <= 0 && !(f === player && gl.fallT > 0)) { p.y = 0; f.vel.y = 0; f.onGround = true; }
 }
 
 /* ---------- Rays ---------- */
@@ -2743,6 +2761,7 @@ function startMatch() {
   startRound();
 }
 function clearProjectiles() {
+  if (typeof stopAllGlitches === 'function' && Object.keys(gl.on).length) stopAllGlitches();
   stopEmote(); closeWheel();
   // leaving a match mid-celebration (pause → lobby/quit) must not leave the dancing winner behind
   if (winner) winner.visible = false; $('#victory').hidden = true; clearAura();
@@ -3567,7 +3586,7 @@ function updateBot(dt) {
 }
 function accelerate(f, wish, dt) {
   if (f.onGround) {
-    const k = 1 - Math.exp(-14 * dt);
+    const k = 1 - Math.exp(-(f === player && gl.on.ice ? 0.7 : 14) * dt);
     f.vel.x += (wish.x - f.vel.x) * k; f.vel.z += (wish.z - f.vel.z) * k;
     return;
   }
@@ -3883,6 +3902,7 @@ function frame(now) {
   updateBuild();
   updateFx(dt);
   updateCamera(dt);
+  updateGlitch(rdt);
   if (S.mode !== 'menu' && S.mode !== 'victory') updateHud(dt);
   if (S.mode !== 'menu') { sun.position.set(player.pos.x + 18, 36, player.pos.z + 10); sun.target.position.set(player.pos.x, 0, player.pos.z); }
   else { sun.position.set(18, 36, 10); sun.target.position.set(0, 0, 0); }
@@ -3941,6 +3961,7 @@ addEventListener('keydown', e => {
   if (e.code === 'Space') e.preventDefault();
   keys[e.code] = true;
   if (S.paused) return;
+  if (e.code === 'KeyJ' && ownerMode && !e.repeat) { const ks = Object.keys(GLITCHES).filter(k => k !== 'chaos'); startGlitch(ks[(Math.random() * ks.length) | 0]); return; }
   if (e.code === 'KeyN' && ownerMode && !e.repeat && S.mode === 'lobby') { toggleBuild(); return; }
   if (buildKey(e)) return;
   if (e.code === 'KeyR') startReload(player);
@@ -4653,6 +4674,112 @@ function buildKey(e) {
   return false;
 }
 
+/* ---------- Video glitches (owner only, on your screen only) ---------- */
+// Fake glitches for filming: each runs for a few seconds and then everything snaps back to normal.
+// J fires a random one without opening the admin panel. Nobody else sees them.
+let gMul = 1;
+const GLITCHES = {
+  noclip: 'Walk through walls', fall: 'Fall through floor', launch: 'Random launches', rubber: 'Rubber-banding', ice: 'Ice physics',
+  gravity: 'Moon gravity', rapid: 'Broken gun', botstuck: 'Bot stuck in wall', botmoon: 'Moonwalking bot', tpose: 'T-pose bot', giant: 'Giant bot', clones: 'Bot clones',
+  chaos: 'CHAOS (all of them)'
+};
+const gl = { on: {}, dur: 8, clones: [], floatSave: null, wireSave: null, skySave: null, fallT: 0, fallCd: 0, launchT: 0, rubT: 0, hist: [], stuck: null, moonA: 0 };
+function startGlitch(k) {
+  const keysOn = k === 'chaos' ? Object.keys(GLITCHES).filter(x => x !== 'chaos' && x !== 'noclip') : [k];
+  const until = performance.now() / 1000 + gl.dur;
+  for (const x of keysOn) gl.on[x] = until;
+  if (gl.on.fall) { gl.fallT = 0; gl.fallCd = 0.2; }
+  if (gl.on.launch) gl.launchT = 0.3;
+  if (gl.on.rubber) { gl.rubT = 1.2; gl.hist = []; }
+  if (gl.on.botstuck) gl.stuck = null;
+  if (gl.on.screen) document.body.classList.add('glitching');
+  if (gl.on.gravity) gMul = 0.22;
+  if (gl.on.wire && !gl.wireSave) { gl.wireSave = new Set(); scene.traverse(o => { if (o.isMesh && o.material && !o.material.wireframe && o.material.wireframe !== undefined) { o.material.wireframe = true; gl.wireSave.add(o.material); } }); }
+  if (gl.on.clones && !gl.clones.length && (bot.mesh.visible || S.mode === 'lobby')) for (let i = 0; i < 6; i++) { const c = makeBody(0xff4b5c, 0x2a2f45); c.traverse(o => { if (o.material === outlineMat) o.visible = false; }); gl.clones.push(c); }
+  if (gl.on.float && !gl.floatSave) { gl.floatSave = []; const grp = curMap && built[curMap] ? built[curMap].group : null; if (grp) grp.children.forEach((m, i) => gl.floatSave.push([m, m.position.y, i])); }
+  if (gl.on.sky && !gl.skySave) gl.skySave = scene.background;
+}
+function stopGlitch(k) {
+  delete gl.on[k];
+  if (k === 'screen') document.body.classList.remove('glitching');
+  if (k === 'gravity') gMul = 1;
+  if (k === 'fall' && gl.fallT > 0) { gl.fallT = 0; glitchRespawn(); }
+  if (k === 'botstuck') gl.stuck = null;
+  if (k === 'wire' && gl.wireSave) { gl.wireSave.forEach(m => { m.wireframe = false; }); gl.wireSave = null; }
+  if (k === 'clones') { gl.clones.forEach(c => scene.remove(c)); gl.clones = []; }
+  if (k === 'float' && gl.floatSave) { gl.floatSave.forEach(([m, y]) => { m.position.y = y; }); gl.floatSave = null; }
+  if (k === 'giant') bot.mesh.scale.set(1, 1, 1);
+  if (k === 'sky' && gl.skySave) { scene.background = gl.skySave; gl.skySave = null; }
+}
+function stopAllGlitches() { for (const k of Object.keys(gl.on)) stopGlitch(k); $('#fakeErr').hidden = true; }
+function showFakeError() {
+  const e = $('#fakeErr'); e.hidden = false; e.classList.remove('show'); void e.offsetWidth; e.classList.add('show');
+  sfx('empty'); setTimeout(() => { e.hidden = true; }, 4500);
+}
+// drop the player back in from the sky above their spawn after falling through the floor
+function glitchRespawn() {
+  const p = player; let sx, sz;
+  if (S.mode === 'lobby') { sx = SPAWN.x; sz = SPAWN.z; }
+  else if (S.pvp) { sx = 0; sz = S.pvp.side === 0 ? 20 : -20; } else { sx = 0; sz = 20; }
+  p.pos.set(sx + rand(-1, 1), 22, sz + rand(-1, 1)); p.vel.set(0, -4, 0); p.onGround = false;
+}
+// runs after the camera and the bot have updated, so the glitches win for this frame
+function updateGlitch(dt) {
+  const now = performance.now() / 1000, t = now;
+  for (const [k, until] of Object.entries(gl.on)) if (now >= until) stopGlitch(k);
+  if (!Object.keys(gl.on).length) return;
+  const p = player, inPlay = p.alive && (S.mode === 'lobby' || S.mode === 'live');
+  // fall through the floor, drop out of the sky over your spawn, land, repeat
+  if (gl.on.fall && inPlay) {
+    if (gl.fallT > 0) { gl.fallT -= dt; if (gl.fallT <= 0) glitchRespawn(); }
+    else if (p.onGround && (gl.fallCd -= dt) <= 0) { gl.fallT = 1.4; gl.fallCd = 2.2; p.vel.set(0, -3, 0); p.onGround = false; sfx('hurt'); }
+  }
+  // get flung around
+  if (gl.on.launch && inPlay && (gl.launchT -= dt) <= 0) {
+    gl.launchT = rand(1.2, 2.2); const a = rand(0, Math.PI * 2), f = rand(6, 14);
+    p.vel.set(Math.cos(a) * f, rand(11, 19), Math.sin(a) * f); p.onGround = false; p.pos.y += 0.05; sfx('dash');
+  }
+  // lag-style rubber-banding: snap back to where you were a moment ago
+  if (gl.on.rubber && inPlay) {
+    gl.hist.push({ t, x: p.pos.x, y: p.pos.y, z: p.pos.z }); while (gl.hist.length && gl.hist[0].t < t - 1) gl.hist.shift();
+    if ((gl.rubT -= dt) <= 0) { gl.rubT = rand(0.9, 1.6); const h = gl.hist.find(q => q.t >= t - 0.7); if (h) { p.pos.set(h.x, h.y, h.z); p.vel.set(0, 0, 0); } }
+  }
+  // the gun forgets its fire rate and never runs dry
+  if (gl.on.rapid && inPlay) { const k = p.loadout[p.slot]; p.cd = Math.min(p.cd, 0.02); p.reloadT = 0; if (W[k] && W[k].mag) p.ammo[k] = W[k].mag; mouse.consumed = false; }
+  // bot glitches (bot duels)
+  if (bot.alive && S.mode === 'live' && !S.pvp) {
+    if (gl.on.botstuck) {
+      if (!gl.stuck) { let best = null, bd = 1e9; for (const b of (built[curMap] ? built[curMap].boxes : [])) { if (b.max.y - b.min.y < 1) continue; const c = new V3((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2), dd = c.distanceTo(bot.pos); if (dd < bd) { bd = dd; best = b; } } gl.stuck = best; }
+      if (gl.stuck) { const b = gl.stuck; bot.pos.set((b.min.x + b.max.x) / 2 + rand(-0.15, 0.15), b.min.y + 0.4 + (Math.random() < 0.1 ? rand(0, 0.5) : 0), (b.min.z + b.max.z) / 2 + rand(-0.15, 0.15)); bot.vel.set(0, 0, 0); bot.mesh.position.copy(bot.pos); bot.mesh.rotation.y += rand(-0.4, 0.4); }
+    }
+    if (gl.on.botmoon) {
+      gl.moonA += dt * 0.9; const r = 6, cx = 0, cz = 0;
+      bot.pos.set(cx + Math.cos(gl.moonA) * r, bot.pos.y, cz + Math.sin(gl.moonA) * r); bot.vel.x = bot.vel.z = 0;
+      bot.mesh.position.copy(bot.pos); bot.mesh.rotation.y = -gl.moonA + Math.PI; // faces the way it came: moonwalking
+      const bu = bot.mesh.userData, sw = Math.sin(t * 9) * 0.6; bu.legL.rotation.x = sw; bu.legR.rotation.x = -sw;
+    }
+  }
+  const u = bot.mesh.userData;
+  if (gl.on.tpose) { u.armL.rotation.set(0, 0, -Math.PI / 2); u.armR.rotation.set(0, 0, Math.PI / 2); u.legL.rotation.set(0, 0, 0); u.legR.rotation.set(0, 0, 0); u.head.rotation.set(0, 0, 0); bot.mesh.rotation.y += dt * 1.5; }
+  if (gl.on.giant) bot.mesh.scale.setScalar(2.6 + Math.sin(t * 3) * 0.15);
+  gl.clones.forEach((c, i) => {
+    const base = bot.mesh.visible ? bot.mesh.position : player.pos.clone().add(dirOf(player.yaw, 0).multiplyScalar(6));
+    const a = i / 6 * Math.PI * 2 + t * 0.7;
+    c.position.set(base.x + Math.cos(a) * 2.2 + rand(-0.15, 0.15), base.y + (Math.random() < 0.1 ? rand(0, 0.6) : 0), base.z + Math.sin(a) * 2.2 + rand(-0.15, 0.15));
+    c.rotation.set(0, rand(-3.2, 3.2), Math.random() < 0.15 ? rand(-0.6, 0.6) : 0); c.visible = Math.random() > 0.08;
+    const cu = c.userData; cu.armL.rotation.set(rand(-2, 2), 0, rand(-1, 1)); cu.armR.rotation.set(rand(-2, 2), 0, rand(-1, 1));
+  });
+  if (gl.floatSave) gl.floatSave.forEach(([m, y, i]) => { m.position.y = y + 0.6 + Math.sin(t * 1.6 + i) * 0.5; });
+  if (gl.on.fisheye) { camera.fov = 140 + Math.sin(t * 2) * 10; camera.updateProjectionMatrix(); }
+  if (gl.on.spin) camera.rotation.z += Math.sin(t * 1.3) * 0.35;
+  if (gl.on.sky) scene.background = new THREE.Color().setHSL((t * 0.6) % 1, 0.8, 0.55);
+  if (gl.on.screen) {
+    const bars = $('#glitchBars').children;
+    for (const b of bars) if (Math.random() < 0.4) { b.style.top = rand(0, 100) + '%'; b.style.height = rand(0.3, 5) + 'vh'; b.style.transform = `translateX(${rand(-8, 8)}vw)`; b.style.opacity = Math.random() < 0.5 ? 0 : rand(0.3, 0.9); }
+    if (Math.random() < 0.08) sfx('tick');
+  }
+}
+
 /* ---------- Owner admin panel ---------- */
 const adm = { aim: false, god: false, ammo: false, fly: false, jump: false, oneshot: false, freezeBot: false, night: false, speed: 1 };
 const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -4715,6 +4842,11 @@ function renderAdmin() {
       </div>
       <label class="admrange" for="admSpeed"><span>Move speed <b id="admSpeedVal">${adm.speed.toFixed(1)}×</b></span><input id="admSpeed" type="range" min="0.5" max="3" step="0.1" value="${adm.speed}"></label>
       <div class="admrow"><button type="button" class="admb" data-act="heal">Full heal</button><button type="button" class="admb" data-act="unlock">Unlock every weapon and skin</button></div>
+    </section>
+    <section class="admsec"><h2>Video glitches</h2>
+      <div class="admrow">${Object.entries(GLITCHES).map(([k, n]) => `<button type="button" class="admb ${k === 'chaos' ? 'chaos' : ''}" data-gl="${k}">${n}</button>`).join('')}</div>
+      <div class="admrow"><span class="admnote">Length:</span>${[5, 8, 15, 30].map(n => `<button type="button" class="admb ${gl.dur === n ? 'on' : ''}" data-gldur="${n}">${n}s</button>`).join('')}<button type="button" class="admb" data-gl="stop">Stop all</button></div>
+      <p class="admnote">Real gameplay glitches for filming, no screen effects. They only happen in your game and switch off by themselves after the length you pick. Clicking one closes this panel so you can record. Press <kbd>J</kbd> any time for a random one. Bot glitches work in bot duels.</p>
     </section>
     <section class="admsec"><h2>Build</h2>
       <div class="admrow"><button type="button" class="admb ${build.on ? 'on' : ''}" data-act="build" ${S.mode === 'lobby' ? '' : 'disabled'}>${build.on ? 'Stop building' : 'Start building'} (N)</button>
@@ -4795,6 +4927,8 @@ $('#adminBody').addEventListener('click', e => {
   if (act === 'heal') { player.hp = 100; player.burnT = 0; $('#admMsg') && ($('#admMsg').textContent = 'Healed.'); }
   if (act === 'unlock') { Object.keys(W).forEach(k => owned.add(k)); Object.keys(W).filter(canSkin).forEach(k => Object.keys(SKINS).forEach(sk => skinsOwned.add(k + ':' + sk))); save(); renderLoadout(); $('#admMsg').textContent = 'Everything unlocked.'; }
   if (act === 'killbot' && S.mode === 'live' && bot.alive) { closeAdmin(); damage(bot, 999, player, false, eyeOf(bot)); return; }
+  if (b.dataset.gldur) { gl.dur = +b.dataset.gldur; renderAdmin(); return; }
+  if (b.dataset.gl) { if (b.dataset.gl === 'stop') { stopAllGlitches(); renderAdmin(); return; } closeAdmin(); startGlitch(b.dataset.gl); return; }
   if (b.dataset.wx) {
     setWeather(b.dataset.wx); renderAdmin();
     if (lobby.room) lobby.room.emit('admin', { a: 'weather', to: '*', w: b.dataset.wx }).catch(() => {});
