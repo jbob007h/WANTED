@@ -2761,7 +2761,6 @@ function startMatch() {
   startRound();
 }
 function clearProjectiles() {
-  if (typeof stopAllGlitches === 'function' && Object.keys(gl.on).length) stopAllGlitches();
   stopEmote(); closeWheel();
   // leaving a match mid-celebration (pause → lobby/quit) must not leave the dancing winner behind
   if (winner) winner.visible = false; $('#victory').hidden = true; clearAura();
@@ -4683,7 +4682,7 @@ const GLITCHES = {
   gravity: 'Moon gravity', rapid: 'Broken gun', botstuck: 'Bot stuck in wall', botmoon: 'Moonwalking bot', tpose: 'T-pose bot', giant: 'Giant bot', clones: 'Bot clones',
   chaos: 'CHAOS (all of them)'
 };
-const gl = { on: {}, dur: 8, clones: [], floatSave: null, wireSave: null, skySave: null, fallT: 0, fallCd: 0, launchT: 0, rubT: 0, hist: [], stuck: null, moonA: 0 };
+const gl = { on: {}, dur: Infinity, clones: [], floatSave: null, wireSave: null, skySave: null, fallT: 0, fallCd: 0, launchT: 0, rubT: 0, hist: [], stuck: null, moonA: 0 };
 function startGlitch(k) {
   const keysOn = k === 'chaos' ? Object.keys(GLITCHES).filter(x => x !== 'chaos' && x !== 'noclip') : [k];
   const until = performance.now() / 1000 + gl.dur;
@@ -4845,8 +4844,8 @@ function renderAdmin() {
     </section>
     <section class="admsec"><h2>Video glitches</h2>
       <div class="admrow">${Object.entries(GLITCHES).map(([k, n]) => `<button type="button" class="admb ${k === 'chaos' ? 'chaos' : ''}" data-gl="${k}">${n}</button>`).join('')}</div>
-      <div class="admrow"><span class="admnote">Length:</span>${[5, 8, 15, 30].map(n => `<button type="button" class="admb ${gl.dur === n ? 'on' : ''}" data-gldur="${n}">${n}s</button>`).join('')}<button type="button" class="admb" data-gl="stop">Stop all</button></div>
-      <p class="admnote">Real gameplay glitches for filming, no screen effects. They only happen in your game and switch off by themselves after the length you pick. Clicking one closes this panel so you can record. Press <kbd>J</kbd> any time for a random one. Bot glitches work in bot duels.</p>
+      <div class="admrow"><span class="admnote">Length:</span>${[5, 8, 15, 30, Infinity].map(n => `<button type="button" class="admb ${gl.dur === n ? 'on' : ''}" data-gldur="${n === Infinity ? 'forever' : n}">${n === Infinity ? 'Forever' : n + 's'}</button>`).join('')}<button type="button" class="admb" data-gl="stop">Stop all</button></div>
+      <p class="admnote">Real gameplay glitches for filming, no screen effects. They only happen in your game and last until you click Stop all (or pick a length to have them switch off by themselves). Clicking one closes this panel so you can record. Press <kbd>J</kbd> any time for a random one. Bot glitches work in bot duels.</p>
     </section>
     <section class="admsec"><h2>Build</h2>
       <div class="admrow"><button type="button" class="admb ${build.on ? 'on' : ''}" data-act="build" ${S.mode === 'lobby' ? '' : 'disabled'}>${build.on ? 'Stop building' : 'Start building'} (N)</button>
@@ -4927,7 +4926,7 @@ $('#adminBody').addEventListener('click', e => {
   if (act === 'heal') { player.hp = 100; player.burnT = 0; $('#admMsg') && ($('#admMsg').textContent = 'Healed.'); }
   if (act === 'unlock') { Object.keys(W).forEach(k => owned.add(k)); Object.keys(W).filter(canSkin).forEach(k => Object.keys(SKINS).forEach(sk => skinsOwned.add(k + ':' + sk))); save(); renderLoadout(); $('#admMsg').textContent = 'Everything unlocked.'; }
   if (act === 'killbot' && S.mode === 'live' && bot.alive) { closeAdmin(); damage(bot, 999, player, false, eyeOf(bot)); return; }
-  if (b.dataset.gldur) { gl.dur = +b.dataset.gldur; renderAdmin(); return; }
+  if (b.dataset.gldur) { gl.dur = b.dataset.gldur === 'forever' ? Infinity : +b.dataset.gldur; renderAdmin(); return; }
   if (b.dataset.gl) { if (b.dataset.gl === 'stop') { stopAllGlitches(); renderAdmin(); return; } closeAdmin(); startGlitch(b.dataset.gl); return; }
   if (b.dataset.wx) {
     setWeather(b.dataset.wx); renderAdmin();
